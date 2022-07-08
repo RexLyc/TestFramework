@@ -84,7 +84,11 @@ class RunToolFunc:
 
         # 打印数据（pre阶段打印输入，post阶段打印输出）
         def log(data):
-            print(data)
+            str = ''
+            for i in data:
+                str += '{:02X} '.format(i)
+            # print("{:02X}".format(data))
+            print('[',str,']')
             return data
         
         def sam_to_tpu(data):
@@ -158,8 +162,8 @@ class Node:
 
     # post仅支持对out数据后处理，其结果影响全局
     def _postRun(self):
-        # 默认进行bytes到list的转换
         if self.node is not None and 'postRun' in self.node:
+            # 默认进行bytes到list的转换
             self.data_zone[self.node['out']]=RunToolFunc.getFunc("bytes_to_list")(self.data_zone[self.node['out']])
             for i in self.node['postRun']:
                 print('postRun: {}'.format(i))
@@ -203,24 +207,117 @@ class ConstantContitionNode(ConditionNode):
                 return
         self.data_zone[self.node['out']]='error'
 
+class TestError:
+    def unfinishedFeature():
+        raise NameError("Unfinished feature")
+
+    def wrongBorder():
+        raise NameError("wrong border")
+    
+    def timeoutLimitExceeded():
+        raise NameError("timeout limit exceeded")
+
+class ComReadTool:
+    # 遵循[begin,end)
+    def _readByLength(dev,timeout,begin,end,basic_len,escape):
+        t1=time.time()
+        result=[]
+        dev.timeout=timeout
+        # 获取包含长度的范围
+        first = dev.read(end)
+        if time.time()-t1>timeout:
+            TestError.timeoutLimitExceeded()
+        # 计算长度
+        calculate_len=0
+        temp=[]
+        for i in first[begin:end]:
+            if i !=escape:
+                temp.append(i)
+        if begin>end: # 反序
+            temp.reverse()
+        for i in temp:
+            calculate_len=(calculate_len<<8)+i
+        # 去掉已经读出来的
+        remain_len=calculate_len+basic_len-len(first)
+        result.extend(first)
+        remain=dev.read(remain_len)
+        if time.time()-t1>timeout:
+            TestError.timeoutLimitExceeded()
+        result.extend(remain)
+        return result
+
+    # begin为起始字符，end为终止字符
+    def _readByBorder(dev,timeout,begin,end,escape):
+        t1=time.time()
+        result = []
+        dev.timeout=timeout
+        first = dev.read(1)
+        if time.time()-t1>timeout:
+            TestError.timeoutLimitExceeded()
+        if first[0] != begin:
+            TestError.wrongBorder()
+        escapeFlag=False
+        result.extend(first)
+        while True:
+            temp = dev.read(1)
+            a=temp[0]
+            print(a)
+            if time.time()-t1>timeout:
+                TestError.timeoutLimitExceeded()
+            result.append(a)
+            if escapeFlag !=True: # 未被转义
+                if a==end: # 成功结束
+                    break
+                elif a==escape: # 遇到转义字符
+                    escapeFlag=True
+            else: # 被转义中
+                # 解除转义
+                escapeFlag=False
+        return result
+
+    def _readDefault(dev,timeout):
+        # 等待数据准备完成
+        t1 = time.time()
+        while dev.inWaiting() == 0:
+            time.sleep(0.001)
+            if time.time()-t1 > timeout:
+                TestError.timeoutLimitExceeded()
+        # 保证数据全部取出
+        byte_number_1 = 0
+        byte_number_2 = 1
+        while byte_number_1 != byte_number_2:
+            if time.time()-t1 > timeout:
+                TestError.timeoutLimitExceeded()
+            byte_number_1 = dev.inWaiting()
+            time.sleep(0.01)
+            byte_number_2 = dev.inWaiting()
+        # 一次性读取
+        return dev.read_all()
+
+    def read(dev,policy):
+        if policy is None:
+            policy={'timeout':2.0}
+        timeout=policy['timeout']
+        if 'type' in policy and policy['type']=='border':
+            return ComReadTool._readByBorder(dev,timeout,policy['begin'],policy['end'],policy['escape'])
+        elif 'type' in policy and policy['type']=='length':
+            return ComReadTool._readByLength(dev,timeout,policy['begin'],policy['end'],policy['basic_len'],policy['escape'])
+        else:
+            return ComReadTool._readDefault(dev,timeout)
+
+
 class ComTestNode(Node):
     def __init__(self,data_zone,node):
         super().__init__(data_zone=data_zone,node=node)
     
     def _run(self):
+        # 写串口
         self.data_zone[self.node['dev']].write(self.data_zone[self.node['in']])
-        # 等待数据准备完成
-        while self.data_zone[self.node['dev']].inWaiting() == 0:
-            time.sleep(0.005)
-        # 保证数据全部取出
-        byte_number_1 = 0
-        byte_number_2 = 1
-        while byte_number_1 != byte_number_2:
-            byte_number_1 = self.data_zone[self.node['dev']].inWaiting()
-            time.sleep(0.005)
-            byte_number_2 = self.data_zone[self.node['dev']].inWaiting()
-        # 一次性读取
-        self.data_zone[self.node['out']]=self.data_zone[self.node['dev']].read_all()
+        # 根据自定义策略读串口
+        out_policy=None
+        if 'out_policy' in self.node:
+            out_policy=self.node['out_policy']
+        self.data_zone[self.node['out']]=ComReadTool.read(self.data_zone[self.node['dev']],out_policy)
 
 class SendTpuNode(Node):
     pass
@@ -308,4 +405,7 @@ def run_test_graph(test_graph):
 
 if __name__ == '__main__':
     # print(model.graph)
+    a=time.time()
     run_test_graph(model.graph)
+    b=time.time()
+    print('time elapsed :{}'.format(b-a))

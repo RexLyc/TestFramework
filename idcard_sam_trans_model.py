@@ -30,7 +30,7 @@ graph = [
         ,'in':{
             'baudrate':'115200'
             ,'parity':'N'
-            ,'port':'COM5'
+            ,'port':'COM4'
         }
         ,'out':'out_tpu'
         ,'prev':'sam'
@@ -75,6 +75,7 @@ graph = [
             'FF':'tpu_reset'
             ,'FE':'tpu_init'
             ,'00':'tpu_read_bcard'
+            ,'01':'tpu_reset'
         }
     }
     # tpu复位命令及运行
@@ -92,6 +93,9 @@ graph = [
         ,'out':'out_tpu1'
         ,'prev':'tpu_status_condition'
         ,'next':'tpu_init'
+        ,'out_policy':{
+            'timeout':5.0
+        }
     }
     # tpu初始化命令及运行
     ,{
@@ -112,7 +116,7 @@ graph = [
     ,{
         'type':'constant'
         ,'id':'tpu_typeb_code'
-        ,'data':[0x0C,0x00,0x31,0x54,0x00,0x03,0x00,0x20,0x22,0x07,0x05,0x13,0x39,0x08]
+        ,'data':[0x0C,0x00,0x31,0x54,0x00,0x01,0x00,0x20,0x22,0x07,0x05,0x13,0x39,0x08]
     }
     ,{
         'type':'com_node'
@@ -158,8 +162,8 @@ graph = [
         ,'id':'send_to_sam'
         ,'dev':'out_sam'
         ,'in': 'command_to_sam'
-        ,'preRun':['log']
-        ,'postRun':['log']
+        # ,'preRun':['log']
+        # ,'postRun':['log']
         ,'out':'recv_from_sam'
         ,'prev':'b_card_status_condition'
         ,'next':'sam_output_extract'
@@ -192,10 +196,20 @@ graph = [
         ,'id':'send_to_tpu'
         ,'dev':'out_tpu'
         ,'in': 'recv_from_sam'
-        ,'preRun':['log','sam_to_tpu','log','pack_tpu','log'] # 按顺序执行各个预处理
-        ,'postRun':['log','unpack_tpu','log','tpu_to_sam','log'] # 按顺序执行各个后处理
+        # ,'preRun':['log','sam_to_tpu','log','pack_tpu','log'] # 按顺序执行各个预处理
+        # ,'postRun':['log','unpack_tpu','log','tpu_to_sam','log'] # 按顺序执行各个后处理
+        ,'preRun':['sam_to_tpu','pack_tpu'] # 按顺序执行各个预处理
+        ,'postRun':['unpack_tpu','tpu_to_sam'] # 按顺序执行各个后处理
         ,'out':'command_to_sam'
         ,'prev':'tpu_sam_condition'
+        # ,'out_policy': {
+        #     'timeout':2.0
+        #     ,'type':'border'
+        #     ,'begin':0x02
+        #     ,'end':0x03
+        #     # 转义字符
+        #     ,'escape':0x10
+        # }
         ,'next':'send_to_sam'
     }
 ]
