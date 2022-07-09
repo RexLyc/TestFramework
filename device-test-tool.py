@@ -110,7 +110,6 @@ class RunToolFunc:
 
         def tpu_to_sam(data):
             sam_length=(data[12]<<8)+data[13]
-            print(sam_length+12,len(data))
             if len(data) != int(sam_length+14):
                 raise NameError("fatal error! receive wrong length packet from tpu")
             result=[]
@@ -162,12 +161,13 @@ class Node:
 
     # post仅支持对out数据后处理，其结果影响全局
     def _postRun(self):
-        if self.node is not None and 'postRun' in self.node:
+        if self.node is not None and self.data_zone is not None:
             # 默认进行bytes到list的转换
             self.data_zone[self.node['out']]=RunToolFunc.getFunc("bytes_to_list")(self.data_zone[self.node['out']])
-            for i in self.node['postRun']:
-                print('postRun: {}'.format(i))
-                self.data_zone[self.node['out']]=RunToolFunc.getFunc(i)(self.data_zone[self.node['out']])
+            if 'postRun' in self.node:
+                for i in self.node['postRun']:
+                    print('postRun: {}'.format(i))
+                    self.data_zone[self.node['out']]=RunToolFunc.getFunc(i)(self.data_zone[self.node['out']])
 
     def doRun(self):
         self._preRun()
@@ -261,7 +261,7 @@ class ComReadTool:
         while True:
             temp = dev.read(1)
             a=temp[0]
-            print(a)
+            # print(a)
             if time.time()-t1>timeout:
                 TestError.timeoutLimitExceeded()
             result.append(a)
