@@ -30,7 +30,7 @@ graph = [
         ,'in':{
             'baudrate':'115200'
             ,'parity':'N'
-            ,'port':'COM4'
+            ,'port':'COM5'
         }
         ,'out':'out_tpu'
         ,'prev':'sam'
@@ -202,14 +202,144 @@ graph = [
         ,'postRun':['unpack_tpu','tpu_to_sam'] # 按顺序执行各个后处理
         ,'out':'command_to_sam'
         ,'prev':'tpu_sam_condition'
-        # ,'out_policy': {
-        #     'timeout':2.0
-        #     ,'type':'border'
-        #     ,'begin':0x02
-        #     ,'end':0x03
-        #     # 转义字符
-        #     ,'escape':0x10
-        # }
+        ,'out_policy': {
+            'timeout':2.0
+            ,'type':'border'
+            ,'begin':0x02
+            ,'end':0x03
+            # 转义字符
+            ,'escape':0x10
+        }
         ,'next':'send_to_sam'
+    }
+]
+
+tpu_readb_graph = [
+    {
+        'type':'init_com'
+        ,'id':'tpu'
+        ,'in':{
+            'baudrate':'115200'
+            ,'parity':'N'
+            ,'port':'COM5'
+        }
+        ,'out':'out_tpu'
+        ,'prev':'sam'
+        ,'next':'tpu_read'
+    }
+    # tpu读状态
+    ,{
+        'type':'constant'
+        ,'id':'tpu_read_code'
+        # 给tpu的数据，只写内容报文，校验和包头包尾可以使用preRun的pack_tpu自动添加
+        ,'data':[0x04,0x00,0x21,0x53,0x02,0x00]
+    }
+    ,{
+        'type':'com_node'
+        ,'id':'tpu_read'
+        ,'dev':'out_tpu'
+        ,'in': 'tpu_read_code'
+        ,'preRun':['pack_tpu']
+        ,'postRun':['unpack_tpu']
+        ,'out':'tpu_status'
+        ,'prev':'sam'
+        ,'next':'tpu_status_extract'
+    }
+    # tpu状态提取
+    ,{
+        'type':'byte_extract'
+        ,'id':'tpu_status_extract'
+        ,'in':'tpu_status'
+        ,'offset':6
+        ,'out':'tpu_status_short'
+        ,'prev':'tpu_read'
+        ,'next':'tpu_status_condition'
+    }
+    # 状态判断和跳转
+    ,{
+        'type':'const_condition_node'
+        ,'id':'tpu_status_condition'
+        ,'in':'tpu_status_short'
+        ,'out':'tpu_status_id'
+        ,'prev':'tpu_read'
+        ,'next':{
+            'FF':'tpu_reset'
+            ,'FE':'tpu_init'
+            ,'00':'tpu_read_bcard'
+            ,'01':'tpu_reset'
+        }
+    }
+    # tpu复位命令及运行
+    ,{
+        'type':'constant'
+        ,'id':'tpu_reset_code'
+        ,'data':[0x04,0x00,0x02,0x53,0x00,0x00]
+    }
+    ,{
+        'type':'com_node'
+        ,'id':'tpu_reset'
+        ,'dev':'out_tpu'
+        ,'in': 'tpu_reset_code'
+        ,'preRun':['pack_tpu']
+        ,'out':'out_tpu1'
+        ,'prev':'tpu_status_condition'
+        ,'next':'tpu_init'
+        ,'out_policy':{
+            'timeout':5.0
+        }
+    }
+    # tpu初始化命令及运行
+    ,{
+        'type':'constant'
+        ,'id':'tpu_init_code'
+        ,'data':[0x02,0x31,0x00,0x01,0x53,0x00,0x00,0x00,0x00,0x00,0x10,0x02,0x17,0x59,0x01,0x3B,0x10,0x02,0x3B,0x11,0x00,0x09,0x39,0x00,0x00,0x00,0x20,0x22,0x07,0x05,0x20,0x22,0x07,0x05,0x00,0x01,0x00,0x33,0x33,0x33,0x00,0x11,0x10,0x03,0x00,0x05,0x00,0x10,0x03,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x2A,0x03]
+    }
+    ,{
+        'type':'com_node'
+        ,'id':'tpu_init'
+        ,'dev':'out_tpu'
+        ,'in':'tpu_init_code'
+        ,'out':'out_tpu2'
+        ,'prev':['tpu_status_condition','tpu_reset']
+        ,'next':'tpu_read_bcard'
+    }
+    # tpu 寻type-b卡
+    ,{
+        'type':'constant'
+        ,'id':'tpu_typeb_code'
+        ,'data':[0x0C,0x00,0x31,0x54,0x00,0x01,0x00,0x20,0x22,0x07,0x05,0x13,0x39,0x08]
+    }
+    ,{
+        'type':'com_node'
+        ,'id':'tpu_read_bcard'
+        ,'dev':'out_tpu'
+        ,'in': 'tpu_typeb_code'
+        ,'preRun':['pack_tpu']
+        ,'postRun':['unpack_tpu']
+        ,'out':'b_card_status'
+        ,'prev':['tpu_status_condition','tpu_init']
+        ,'next':'b_card_status_extract'
+    }
+    # 读卡状态提取
+    ,{
+        'type':'byte_extract'
+        ,'id':'b_card_status_extract'
+        ,'in':'b_card_status'
+        ,'offset':5
+        ,'out':'b_card_status_short'
+        ,'prev':'tpu_read_bcard'
+        ,'next':'b_card_status_condition'
+    }
+    # 读卡状态判断和跳转
+    ,{
+        'type':'const_condition_node'
+        ,'id':'b_card_status_condition'
+        ,'in':'b_card_status_short'
+        ,'out':'bcard_status_id'
+        ,'prev':'b_card_status_extract'
+        ,'next':{
+            '01':'send_to_sam'
+            ,'00':'tpu_read_bcard'
+        }
     }
 ]
