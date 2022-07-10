@@ -5,11 +5,14 @@ from platform import node
 from struct import unpack
 import sys
 import glob
+from tokenize import Name
 from numpy import isin
 import serial
 import time
 import json
 import idcard_sam_trans_model as model;
+
+debug_mode=True
 
 def serial_ports():
     """ Lists serial port names
@@ -125,6 +128,9 @@ class RunToolFunc:
                 temp.extend(data) 
                 data=temp
             return data
+        
+        def incr(data):
+            return data+1
 
         if name=='pack_tpu':
             return pack_tpu
@@ -138,6 +144,8 @@ class RunToolFunc:
             return tpu_to_sam
         elif name=='bytes_to_list':
             return bytes_to_list
+        elif name=='incr':
+            return incr
         else:
             return None
 
@@ -153,7 +161,7 @@ class Node:
     def _preRun(self):
         if self.node is not None and 'preRun' in self.node:
             for i in self.node['preRun']:
-                print('preRun: {}'.format(i))
+                # print('preRun: {}'.format(i))
                 self.data_zone[self.node['in']]=RunToolFunc.getFunc(i)(self.data_zone[self.node['in']])
 
     def _run(self):
@@ -166,7 +174,7 @@ class Node:
             self.data_zone[self.node['out']]=RunToolFunc.getFunc("bytes_to_list")(self.data_zone[self.node['out']])
             if 'postRun' in self.node:
                 for i in self.node['postRun']:
-                    print('postRun: {}'.format(i))
+                    # print('postRun: {}'.format(i))
                     self.data_zone[self.node['out']]=RunToolFunc.getFunc(i)(self.data_zone[self.node['out']])
 
     def doRun(self):
@@ -208,6 +216,9 @@ class ConstantContitionNode(ConditionNode):
         self.data_zone[self.node['out']]='error'
 
 class TestError:
+    def noSuchSTX():
+        raise NameError("Unknown STX")
+
     def unfinishedFeature():
         raise NameError("Unfinished feature")
 
@@ -238,7 +249,7 @@ class ComReadTool:
         for i in temp:
             calculate_len=(calculate_len<<8)+i
         # 去掉已经读出来的
-        remain_len=calculate_len+basic_len-len(first)
+        remain_len=calculate_len+basic_len
         result.extend(first)
         remain=dev.read(remain_len)
         if time.time()-t1>timeout:
@@ -275,6 +286,21 @@ class ComReadTool:
                 escapeFlag=False
         return result
 
+    # 根据首字节标志区分长度字段所在位置
+    def _readSTXMultiLength(dev,timeout,length_map,escape=None):
+        t1=time.time()
+        result=[]
+        dev.timeout=timeout
+        first=dev.read(1)
+        if time.time()-t1>timeout:
+            TestError.timeoutLimitExceeded()
+        if first[0] not in length_map:
+            TestError.noSuchSTX()
+        temp = ComReadTool._readByLength(dev,timeout,length_map[first[0]]['begin'],length_map[first[0]]['end'],length_map[first[0]]['basic_len'],escape)
+        result.append(first[0])
+        result.extend(temp)
+        return result
+
     def _readDefault(dev,timeout):
         # 等待数据准备完成
         t1 = time.time()
@@ -302,6 +328,8 @@ class ComReadTool:
             return ComReadTool._readByBorder(dev,timeout,policy['begin'],policy['end'],policy['escape'])
         elif 'type' in policy and policy['type']=='length':
             return ComReadTool._readByLength(dev,timeout,policy['begin'],policy['end'],policy['basic_len'],policy['escape'])
+        elif 'type' in policy and policy['type']=='stx_multi_length':
+            return ComReadTool._readSTXMultiLength(dev,timeout,policy['length_map'],policy['escape'])
         else:
             return ComReadTool._readDefault(dev,timeout)
 
@@ -347,19 +375,29 @@ class ByteExtract(Node):
     def _run(self):
         self.data_zone[self.node['out']]='{:02X}'.format(self.data_zone[self.node['in']][self.node['offset']])
 
+class InfoNode(Node):
+    def __init__(self,data_zone,node):
+        super().__init__(data_zone=data_zone,node=node)
+    
+    def _run(self):
+        print("round : {}".format(self.data_zone[self.node['in']]))
+        self.data_zone[self.node['out']]=self.data_zone[self.node['in']]
+
 class NodeFactory:
     def createNode(graph_node,global_data):
         if graph_node['type']=='init_com':
             return ComInitNode(data_zone=global_data,node=graph_node)
         elif graph_node['type']=='com_node':
             return ComTestNode(data_zone=global_data,node=graph_node)
-        elif graph_node['type']=='constant':
+        elif graph_node['type']=='constant' or graph_node['type']=='variable':
             # 常量直接记录，不必建节点
             global_data[graph_node['id']]=graph_node['data']
         elif graph_node['type']=='start':
             return StartNode(node=graph_node)
         # elif graph_node['type']=='tpu_status_extract':
         #     return TpuStatusExtract(data_zone=global_data,node=graph_node)
+        elif graph_node['type']=='info_node':
+            return InfoNode(data_zone=global_data,node=graph_node)
         elif graph_node['type']=='end':
             return EndNode()
         elif graph_node['type']=='const_condition_node':
@@ -379,7 +417,8 @@ def run_test_graph(test_graph):
         node = NodeFactory.createNode(i,global_data)
         # 并非所有节点都需要运行
         if isinstance(node,Node):
-            print("node: ",i)
+            if debug_mode:
+                print("node: ",i)
             nodes[i['id']]=node
             if i['prev']=='start':
                 if 'start' in nodes:
@@ -394,7 +433,8 @@ def run_test_graph(test_graph):
     nodes['end']=EndNode()
     currentNode = nodes['start']
     while isinstance(currentNode,EndNode) != True:
-        print('running node',currentNode)
+        if debug_mode:
+            print('running node',currentNode)
         currentNode.doRun()
         if isinstance(currentNode,ConditionNode):
             currentNode=nodes[global_data[currentNode.node['out']]]
