@@ -12,7 +12,7 @@ import time
 import json
 import idcard_sam_trans_model as model;
 
-debug_mode=True
+debug_mode=False
 
 def serial_ports():
     """ Lists serial port names
