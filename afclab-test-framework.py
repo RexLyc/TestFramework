@@ -1,19 +1,29 @@
 from stat import filemode
 import sys
+from tempfile import tempdir
 
 from PyQt5.QtWidgets import QApplication, QGraphicsView, QWidget, QMainWindow,QVBoxLayout,QHBoxLayout,QLabel,QMenu,QAction,QGraphicsScene,QShortcut
-from PyQt5.QtWidgets import QGraphicsItem,QGraphicsItemGroup
-from PyQt5.QtGui import QIcon,QColor,QKeySequence,QPen,QPainter
+from PyQt5.QtWidgets import QGraphicsItem,QGraphicsItemGroup,QStyle
+from PyQt5.QtGui import QIcon,QColor,QKeySequence,QPen,QPainter,QStyleHints,QRadialGradient,QBrush
 from PyQt5.QtCore import Qt,QLine,QObject,QRectF
 
 import pyqtgraph as pg
-from PyQt5.QtWidgets import QApplication, QGridLayout, QGroupBox, QWidget,QPushButton,QListWidget
+from PyQt5.QtWidgets import QApplication, QGridLayout, QGroupBox, QWidget,QPushButton,QListWidget,QStyleOptionGraphicsItem
 from pyqtgraph.flowchart import Flowchart
 import math
+
+from TestGraphCanvas import *
 
 pg.setConfigOptions(background='w')
 pg.setConfigOptions(crashWarning=True)
 pg.setConfigOptions(exitCleanup=True)
+
+# 全局信号
+class GlobalSignal(QObject):
+    pass
+
+class TestGraphModel(QObject):
+    pass
 
 # controller of MVC
 class TestGraphController(QObject):
@@ -125,13 +135,30 @@ class TestGraphRoundRect(QGraphicsItem):
         self._width=width
         self._height=height
         self._round=round
-        self.setFlag()
+        self.setFlag(QGraphicsItem.ItemIsSelectable)
+        self.setFlag(QGraphicsItem.ItemIsMovable)
+        
 
     def paint(self,painter,option,widget):
+        # print(option.state&QStyle.State_Selected)
+        print(int(QStyle.State_Selected))
+        print(int(option.state))
+        if(int(option.state) or QStyle.State_Selected):
+            print("select")
+            tmpRect=QRectF(self._x-5,self._y-5,self._width+10,self._height+10)
+            radialGradient=QRadialGradient(tmpRect.center(),tmpRect.width()/2)
+            radialGradient.setColorAt(0.0,QColor(0,0,0,1.0))
+            radialGradient.setColorAt(1.0,QColor(255,255,255,1.0))
+            brush = QBrush(radialGradient)
+            save=painter.brush()
+            painter.setBrush(brush)
+            painter.drawRect(tmpRect)
+            painter.setBrush(save)
         painter.drawRoundedRect(self._x,self._y,self._width,self._height,self._round,self._round)
+        
 
     def boundingRect(self) -> QRectF:
-        return super().boundingRect()
+        return QRectF(self._x,self._y,self._width,self._height)
 
 class TestGraphNode(QGraphicsItemGroup):
     def __init__(self,x,y):
@@ -151,21 +178,23 @@ class TestGraphicsView(QWidget):
     
     def setUI(self):
         self.scene=GridGraphScene(self)
+        # self.scene=QGraphicsScene(self)
         self.view=QGraphicsView(self)
         # 设置渲染属性
-        self.view.setRenderHints(QPainter.Antialiasing |                    # 抗锯齿
+        self.view.setRenderHints(QPainter.Antialiasing |               # 抗锯齿
                             QPainter.HighQualityAntialiasing |         # 高品质抗锯齿
                             QPainter.TextAntialiasing |                # 文字抗锯齿
                             QPainter.SmoothPixmapTransform |           # 使图元变换更加平滑
                             QPainter.LosslessImageRendering)           # 不失真的图片渲染
-        # # 视窗更新模式
-        # self.view.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
-        # # 设置水平和竖直方向的滚动条不显示
-        # self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        # self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        # self.view.setTransformationAnchor(self.view.AnchorUnderMouse)
+        # 视窗更新模式
+        self.view.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+        # 设置水平和竖直方向的滚动条不显示
+        self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.view.setTransformationAnchor(self.view.AnchorUnderMouse)
         self.view.setScene(self.scene)
-        # self.view.setDragMode(self.view.RubberBandDrag)
+        self.view.setDragMode(self.view.RubberBandDrag)
+        self.view.setAcceptDrops(True)
         # 垂直布局
         self.layout=QHBoxLayout(self)
         self.layout.addWidget(self.view,100)
@@ -175,6 +204,7 @@ class TestGraphicsView(QWidget):
         # 添加绘制内容
         for i in self._nodeMap.values():
             self.scene.addItem(i)
+            
 
 
 class DemoUI(QMainWindow):

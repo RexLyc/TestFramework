@@ -247,8 +247,22 @@ graph = [
     }
 ]
 
-tpu_readb_graph = [
+
+new_sam_graph = [
+    # 两个设备初始化
     {
+        'type':'init_com'
+        ,'id':'sam'
+        ,'in': {
+            'baudrate':'115200'
+            ,'parity':'N'
+            ,'port':'COM7'
+        }
+        ,'out':'out_sam'
+        ,'prev':'start' # 标记起始
+        ,'next':'tpu'
+    }
+    ,{
         'type':'init_com'
         ,'id':'tpu'
         ,'in':{
@@ -347,7 +361,7 @@ tpu_readb_graph = [
         ,'id':'tpu_read_bcard'
         ,'dev':'out_tpu'
         ,'in': 'tpu_typeb_code'
-        ,'preRun':['pack_tpu']
+        ,'preRun':['pack_tpu','log']
         ,'postRun':['unpack_tpu']
         ,'out':'b_card_status'
         ,'prev':['tpu_status_condition','tpu_init']
@@ -371,8 +385,102 @@ tpu_readb_graph = [
         ,'out':'bcard_status_id'
         ,'prev':'b_card_status_extract'
         ,'next':{
-            '01':'send_to_sam'
-            ,'00':'tpu_read_bcard'
+            '00':'round_info'
+            ,'01':'tpu_read_bcard'
         }
+    }
+    # 发SAM命令,第一次是固定的
+    ,{
+        'type':'constant'
+        ,'id':'command_to_sam'
+        ,'data':[0x02,0x00,0x00,0x00,0x1c,0x80,0x00,0x00,0x00,0x12,0x00,0x00,0x3c,0x00,0x00,0xbe,0x99,0x00,0x00,0x00,0x0c,0x50,0x00,0x00,0x00,0x00,0xd1,0x03,0x86,0x07,0x00,0x80,0x90,0x8a,0x03]
+    }
+    ,{
+        'type':'variable'
+        ,'id':'round_var'
+        ,'data':0
+    }
+    ,{
+        'type':'info_node'
+        ,'id':'round_info'
+        ,'in':'round_var'
+        ,'out':'round_var'
+        ,'preRun':['incr']
+        ,'prev':['b_card_status_condition','send_to_tpu']
+        ,'next':'send_to_sam'
+    }
+    ,{
+        'type':'com_node'
+        ,'id':'send_to_sam'
+        ,'dev':'out_sam'
+        ,'in': 'command_to_sam'
+        # ,'preRun':['log']
+        # ,'postRun':['log']
+        ,'out':'recv_from_sam'
+        ,'prev':'b_card_status_condition'
+        ,'next':'sam_output_extract'
+        ,'out_policy': {
+            'timeout':2.0
+            ,'type':'stx_multi_length'
+            ,'escape':None
+            ,'length_map':{
+                0xDD:{
+                    # 去除首字节后的下标,额外长度
+                    'begin':0
+                    ,'end':2
+                    ,'basic_len':0
+                }
+                ,0x02:{
+                    # 去除首字节后的下标
+                    'begin':0
+                    ,'end':4
+                    ,'basic_len':2
+                }
+            }
+        }
+    }
+    # 提取首字节用于判断是否完成通信
+    ,{
+        'type':'byte_extract'
+        ,'id':'sam_output_extract'
+        ,'in':'recv_from_sam'
+        ,'offset':0
+        ,'out':'recv_from_sam_short'
+        ,'prev':'send_to_sam'
+        ,'next':'tpu_sam_condition'
+    }
+    # sam返回状态判断和跳转
+    ,{
+        'type':'const_condition_node'
+        ,'id':'tpu_sam_condition'
+        ,'in':'recv_from_sam_short'
+        ,'out':'sam_tpu_status_id'
+        ,'prev':'sam_output_extract'
+        ,'next':{
+            'DD':'send_to_tpu' # 判断条件目前是大小写敏感的
+            ,'02':'end'
+        }
+    }
+    # sam数据发到tpu
+    ,{
+        'type':'com_node'
+        ,'id':'send_to_tpu'
+        ,'dev':'out_tpu'
+        ,'in': 'recv_from_sam'
+        # ,'preRun':['log','sam_to_tpu','log','pack_tpu','log'] # 按顺序执行各个预处理
+        # ,'postRun':['log','unpack_tpu','log','tpu_to_sam','log'] # 按顺序执行各个后处理
+        ,'preRun':['sam_to_tpu','pack_tpu'] # 按顺序执行各个预处理
+        ,'postRun':['unpack_tpu','tpu_to_sam'] # 按顺序执行各个后处理
+        ,'out':'command_to_sam'
+        ,'prev':'tpu_sam_condition'
+        ,'out_policy': {
+            'timeout':2.0
+            ,'type':'border'
+            ,'begin':0x02
+            ,'end':0x03
+            # 转义字符
+            ,'escape':0x10
+        }
+        ,'next':'round_info'
     }
 ]
