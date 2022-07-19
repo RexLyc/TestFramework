@@ -11,8 +11,9 @@ import serial
 import time
 import json
 import idcard_sam_trans_model as model;
+from crcmod import mkCrcFun
 
-debug_mode=False
+debug_mode=True
 
 def serial_ports():
     """ Lists serial port names
@@ -131,6 +132,13 @@ class RunToolFunc:
         
         def incr(data):
             return data+1
+        
+        def unpack_new_sam(data):
+            # crc 校验
+            pass
+
+        def pack_new_sam(data):
+            pass
 
         if name=='pack_tpu':
             return pack_tpu
@@ -367,13 +375,23 @@ class ComInitNode(Node):
 #         # 状态在报文第8个字节(从0开始数)
 #         self.data_zone[self.node['out']]='{:02X}'.format(self.data_zone[self.node['in']][8])
 
-# 获取指定位置的字节
+# 获取指定位置的字节，转为十六进制字符串
 class ByteExtract(Node):
     def __init__(self,data_zone,node):
         super().__init__(data_zone=data_zone,node=node)
     
     def _run(self):
         self.data_zone[self.node['out']]='{:02X}'.format(self.data_zone[self.node['in']][self.node['offset']])
+
+# 获取指定范围的字节，转为十六进制数字字符串
+class BytesExtract(Node):
+    def __init__(self,data_zone,node):
+        super().__init__(data_zone=data_zone,node=node)
+    
+    def _run(self):
+        self.data_zone[self.node['out']]=''
+        for i in range(self.node['begin'],self.node['end']):
+            self.data_zone[self.node['out']]+='{:02X}'.format(self.data_zone[self.node['in']][i])
 
 class InfoNode(Node):
     def __init__(self,data_zone,node):
@@ -446,6 +464,7 @@ def run_test_graph(test_graph):
 if __name__ == '__main__':
     # print(model.graph)
     a=time.time()
-    run_test_graph(model.graph)
+    # run_test_graph(model.graph)
+    run_test_graph(model.new_sam_graph)
     b=time.time()
     print('time elapsed :{}'.format(b-a))
