@@ -1,17 +1,11 @@
 # 使用pyqtgraph的flowchart进行流程图绘制、保存
-
 import sys
 from types import MethodType
-
-from PyQt5.QtWidgets import QApplication, QGraphicsView, QWidget, QMainWindow,QVBoxLayout,QHBoxLayout,QLabel,QMenu,QAction,QGraphicsScene,QShortcut
-from PyQt5.QtWidgets import QGraphicsItem,QGraphicsItemGroup,QStyle
-from PyQt5.QtGui import QIcon,QColor,QKeySequence,QPen,QPainter,QStyleHints,QRadialGradient,QBrush
-from PyQt5.QtCore import Qt,QLine,QObject,QRectF
-
+from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow,QVBoxLayout,QHBoxLayout,QLabel,QMenu,QAction
+from PyQt5.QtGui import QIcon
+from PyQt5.QtCore import Qt,QObject
 import pyqtgraph as pg
-from PyQt5.QtWidgets import QApplication, QGridLayout, QGroupBox, QWidget,QPushButton,QListWidget,QStyleOptionGraphicsItem
-from pyqtgraph.flowchart import Flowchart,FlowchartGraphicsView,Node
-import math
+from pyqtgraph.flowchart import Flowchart
 from TestGraphCanvasNode import BaseMiddleGraphNode,BorderGraphNode
 
 pg.setConfigOptions(background='w')
@@ -27,6 +21,22 @@ class TestGraph(QObject):
     def clear(self):
         self._graph=[]
     
+    def addNode(self,node):
+        self._graph.append(node)
+    
+    def flowConnect(self,prevNodeId,nextNodeId):
+        # 单后继节点
+        # 多后继
+        pass
+
+    def flowDisconnect(self,prevNodeId,nextNodeId):
+        pass
+
+    def dataConnect(self,prevNodeId,prevDataId,nextNodeId,nextDataId):
+        pass
+
+    def dataDisconnect(self,prevNodeId,prevDataId,nextNodeId,nextDataId):
+        pass
 
 # 测试图绘制封装类
 class TestGraphCanvas(QWidget):
@@ -35,10 +45,13 @@ class TestGraphCanvas(QWidget):
         self.setUI()
 
     def closeEvent(self, a0) -> None:
-        self._canvas.clear() 
+        self._canvas.clear()
         self._canvas.viewBox.close()
         return super().closeEvent(a0)
     
+    def newNode(self,action :QAction):
+        print(action.text())
+
     def setUI(self):
         self.layout=QHBoxLayout(self)
         self._canvas=Flowchart()
@@ -49,10 +62,22 @@ class TestGraphCanvas(QWidget):
         # remove default input output nodes
         self._canvas.removeNode(self._canvas.inputNode)
         self._canvas.removeNode(self._canvas.outputNode)
-        print(self._canvas.viewBox.getContextMenus)
         # 动态覆盖pyqtgraph提供的上下文菜单
         # 成员函数的覆盖需要用MethodType进行绑定
-        self._canvas.viewBox.getMenu=MethodType(lambda self,ev:QMenu(),self._canvas.viewBox)
+        self._contextMenu=QMenu('菜单',self)
+        self._contextCOMMenu=QMenu('串口',self._contextMenu)
+        self._contextCommonMenu=QMenu('通用',self._contextMenu)
+        self._contextCOMActions=[QAction(i,self) for i in ['串口初始化节点','串口测试节点']]
+        for i in self._contextCOMActions:
+            self._contextCOMMenu.addAction(i)
+        self._contextCommonActions=[QAction(i,self) for i in ['单字节提取节点','多字节提取节点','条件跳转节点']]
+        for i in self._contextCommonActions:
+            self._contextCommonMenu.addAction(i)
+        self._contextMenu.addMenu(self._contextCOMMenu)
+        self._contextMenu.addMenu(self._contextCommonMenu)
+        self._contextMenu.triggered.connect(self.newNode)
+        tempContext=self._contextMenu
+        self._canvas.viewBox.raiseContextMenu=MethodType(lambda self,ev:tempContext.popup(ev.screenPos().toPoint()),self._canvas.viewBox)
     
     def draw(self,graph):
         # 把默认的start/end画出来
@@ -109,10 +134,10 @@ class GraphMainWindow(QMainWindow):
         # MenuBar
         self._fileMenu=self.menuBar().addMenu('文件')
         self._newFileAction=QAction('新建',self)
-        self._newFileShortcut=QShortcut
         self._newFileAction.triggered.connect(self.newFile)
         self._newFileAction.setShortcut("Ctrl+N")
         self._fileMenu.addAction(self._newFileAction)
+        self.newFile(True)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
