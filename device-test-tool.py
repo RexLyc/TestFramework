@@ -1,17 +1,8 @@
-from cgitb import reset
-from msilib.schema import Error
-from operator import ne, xor
-from platform import node
-from struct import unpack
 import sys
 import glob
-from tokenize import Name
-from numpy import isin
 import serial
 import time
-import json
 import idcard_sam_trans_model as model;
-from crcmod import mkCrcFun
 
 debug_mode=True
 
