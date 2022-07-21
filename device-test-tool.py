@@ -8,7 +8,6 @@ debug_mode=True
 
 def serial_ports():
     """ Lists serial port names
-
         :raises EnvironmentError:
             On unsupported or unknown platforms
         :returns:
@@ -23,7 +22,6 @@ def serial_ports():
         ports = glob.glob('/dev/tty.*')
     else:
         raise EnvironmentError('Unsupported platform')
-
     result = []
     for port in ports:
         try:
@@ -124,12 +122,69 @@ class RunToolFunc:
         def incr(data):
             return data+1
         
+        def crc16_ccitt(data):
+            crc16_ccitt_table=[0x0000,0x1021,0x2042,0x3063,0x4084,0x50A5,0x60C6,0x70E7
+                            ,0x8108,0x9129,0xA14A,0xB16B,0xC18C,0xD1AD,0xE1CE,0xF1EF]
+            def crc16one(input,incrc):
+                outcrc=incrc
+                temp=outcrc&0xf000
+                temp>>=12
+                outcrc<<=4
+                outcrc^=crc16_ccitt_table[temp^input>>4]
+                temp=outcrc&0xf000
+                temp>>=12
+                outcrc<<=4
+                outcrc^=crc16_ccitt_table[temp^input&0x0f]
+                return outcrc&0xffff
+            
+            crc=0
+            for i in data:
+                crc=crc16one(i,crc)
+            return [crc>>8,crc&0xff]
+        
+        def bytes_to_upper_str(data):
+            '''
+            input: bytes, byte[]
+            output: 'XXXXXXXX...'
+            '''
+            output=''
+            for i in data:
+                output+='{:02X}'.format(i)
+            return output
+
         def unpack_new_sam(data):
-            # crc 校验
-            pass
+            '''
+            input: 从固定头部到校验字段的完整包
+            output: 从命令字段到数据结束
+            exception: 长度错误，或校验失败抛出异常
+            '''
+            data=data[6:]
+            length=data[0]<<24+data[1]<<16+data[2]<<8+data[3]
+            if length != len(data)-4:
+                raise NameError('fatal error!receive wrong packet length from new sam!')
+            crc=crc16_ccitt(data)
+            if crc[0]!=data[-2] or crc[1]!=data[-1]:
+                raise NameError('fatal error!receive wrong crc16_ccitt package from new sam!')
+            return data[4:-2]
 
         def pack_new_sam(data):
-            pass
+            '''
+            input: 从命令字段到数据结束
+            return: 包含从固定头部到校验字段的完整包
+            '''
+            # 添加长度
+            length=len(data)
+            output=[(length&0xff000000)>>24,(length&0x00ff0000)>>16,(length&0x0000ff00)>>8,(length&0x000000ff)]
+            output.extend(data)
+            crc=crc16_ccitt(data)
+            # 添加校验字
+            output.append(crc[0])
+            output.append(crc[1])
+            # 添加头
+            temp=output
+            output=[0x53,0x44,0x73,0x45,0x73,0x00]
+            output.append(temp)
+            return output
 
         if name=='pack_tpu':
             return pack_tpu
@@ -145,6 +200,12 @@ class RunToolFunc:
             return bytes_to_list
         elif name=='incr':
             return incr
+        elif name=='pack_new_sam':
+            return pack_new_sam
+        elif name=='unpack_new_sam':
+            return unpack_new_sam
+        elif name=='bytes_to_upper_str':
+            return bytes_to_upper_str
         else:
             return None
 
@@ -374,7 +435,7 @@ class ByteExtract(Node):
     def _run(self):
         self.data_zone[self.node['out']]='{:02X}'.format(self.data_zone[self.node['in']][self.node['offset']])
 
-# 获取指定范围的字节，转为十六进制数字字符串
+# 获取指定范围的字节，转为字节数组
 class BytesExtract(Node):
     def __init__(self,data_zone,node):
         super().__init__(data_zone=data_zone,node=node)
@@ -382,7 +443,7 @@ class BytesExtract(Node):
     def _run(self):
         self.data_zone[self.node['out']]=''
         for i in range(self.node['begin'],self.node['end']):
-            self.data_zone[self.node['out']]+='{:02X}'.format(self.data_zone[self.node['in']][i])
+            self.data_zone[self.node['out']].append(self.data_zone[self.node['in']][i])
 
 class InfoNode(Node):
     def __init__(self,data_zone,node):

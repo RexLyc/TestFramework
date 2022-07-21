@@ -1,16 +1,62 @@
 # 使用pyqtgraph的flowchart进行流程图绘制、保存
 import sys
+from tkinter.messagebox import showinfo
 from types import MethodType
-from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow,QVBoxLayout,QHBoxLayout,QLabel,QMenu,QAction
+from PyQt5.QtWidgets import QApplication, QWidget, QMainWindow,QVBoxLayout,QHBoxLayout,QLabel,QMenu,QAction,QPushButton
 from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import Qt,QObject
+from PyQt5.QtCore import Qt,QObject,pyqtSignal
 import pyqtgraph as pg
 from pyqtgraph.flowchart import Flowchart
-from TestGraphCanvasNode import BaseMiddleGraphNode,BorderGraphNode
+from pyqtgraph import DataTreeWidget
+from TestGraphCanvasNode import BaseMiddleGraphNode, BorderGraphItem,BorderGraphNode
+import pyqtgraph.parametertree.parameterTypes as pTypes
+from pyqtgraph.parametertree import Parameter, ParameterTree
+
 
 pg.setConfigOptions(background='w')
 pg.setConfigOptions(crashWarning=True)
 pg.setConfigOptions(exitCleanup=True)
+
+
+
+## test subclassing parameters
+## This parameter automatically generates two child parameters which are always reciprocals of each other
+class ComplexParameter(pTypes.GroupParameter):
+    def __init__(self, **opts):
+        opts['type'] = 'bool'
+        opts['value'] = True
+        pTypes.GroupParameter.__init__(self, **opts)
+        
+        self.addChild({'name': 'A = 1/B', 'type': 'float', 'value': 7, 'suffix': 'Hz', 'siPrefix': True})
+        self.addChild({'name': 'B = 1/A', 'type': 'float', 'value': 1/7., 'suffix': 's', 'siPrefix': True})
+        self.a = self.param('A = 1/B')
+        self.b = self.param('B = 1/A')
+        self.a.sigValueChanged.connect(self.aChanged)
+        self.b.sigValueChanged.connect(self.bChanged)
+        
+    def aChanged(self):
+        self.b.setValue(1.0 / self.a.value(), blockSignal=self.bChanged)
+
+    def bChanged(self):
+        self.a.setValue(1.0 / self.b.value(), blockSignal=self.aChanged)
+
+
+## test add/remove
+## this group includes a menu allowing the user to add new parameters into its child list
+class ScalableGroup(pTypes.GroupParameter):
+    def __init__(self, **opts):
+        opts['type'] = 'group'
+        opts['addText'] = "Add"
+        opts['addList'] = ['str', 'float', 'int']
+        pTypes.GroupParameter.__init__(self, **opts)
+    
+    def addNew(self, typ):
+        val = {
+            'str': '',
+            'float': 0.0,
+            'int': 0
+        }[typ]
+        self.addChild(dict(name="ScalableParam %d" % (len(self.childs)+1), type=typ, value=val, removable=True, renamable=True))
 
 # 测试图数据封装类
 class TestGraph(QObject):
@@ -40,8 +86,9 @@ class TestGraph(QObject):
 
 # 测试图绘制封装类
 class TestGraphCanvas(QWidget):
-    def __init__(self,parent):
+    def __init__(self,parent,graph):
         super().__init__(parent)
+        self._graph=graph
         self.setUI()
 
     def closeEvent(self, a0) -> None:
@@ -78,6 +125,9 @@ class TestGraphCanvas(QWidget):
         self._contextMenu.triggered.connect(self.newNode)
         tempContext=self._contextMenu
         self._canvas.viewBox.raiseContextMenu=MethodType(lambda self,ev:tempContext.popup(ev.screenPos().toPoint()),self._canvas.viewBox)
+        # 点击节点的信号处理
+
+        self._canvas.widget().chartWidget.scene().selectionChanged.connect(self.selectionChanged)
     
     def draw(self,graph):
         # 把默认的start/end画出来
@@ -88,14 +138,78 @@ class TestGraphCanvas(QWidget):
         # 画其他节点
         pass
 
+    def selectionChanged(self):
+        items = self._canvas.widget().chartWidget.scene().selectedItems()
+        self.canvasSelectionChanged.emit(items)
+    
+    canvasSelectionChanged = pyqtSignal(object)
+
+
 # 测试图树结构封装类
 class TestGraphPropertyPanel(QWidget):
-    def __init__(self,parent):
+    def __init__(self,parent,graph):
         super().__init__(parent)
+        self._graph=graph
         self.setUI()
     
     def setUI(self):
         self.layout=QVBoxLayout(self)
+        # 不能设置parent为self，会被视为意图替换layout而被禁止
+        self._toolButtonLayout=QVBoxLayout()
+        self._parameterTreeLayout=QHBoxLayout()
+        self._runGraphButton=QPushButton("运行测试",self)
+        self._debugGraphButton=QPushButton("调试测试",self)
+        self._toolButtonLayout.addWidget(self._runGraphButton)
+        self._toolButtonLayout.addWidget(self._debugGraphButton)
+        self._parameterTree=ParameterTree(self)
+        self._parameterTreeLayout.addWidget(self._parameterTree)
+        self.layout.addItem(self._parameterTreeLayout)
+        self.layout.addItem(self._toolButtonLayout)
+    
+    def onSelectionChanged(self,items):
+        if len(items)>1:
+            print('should only select one item,use items[0]')
+        elif len(items)==0:
+            self.clear()
+            return
+        item=items[0]
+        self.showNode(item)
+
+    def clear(self):
+        self._parameterTree.clear()
+    
+    def showNode(self,item):
+        # from grphicItem to node
+        nodeName=item.node.name()
+        
+        params = [
+            {'name': 'Save/Restore functionality', 'type': 'group', 'children': [
+                {'name': 'Save State', 'type': 'action'},
+                {'name': 'Restore State', 'type': 'action', 'children': [
+                    {'name': 'Add missing items', 'type': 'bool', 'value': True},
+                    {'name': 'Remove extra items', 'type': 'bool', 'value': True},
+                ]},
+            ]},
+            {'name': 'Custom context menu', 'type': 'group', 'children': [
+                {'name': 'List contextMenu', 'type': 'float', 'value': 0, 'context': [
+                    'menu1',
+                    'menu2'
+                ]},
+                {'name': 'Dict contextMenu', 'type': 'float', 'value': 0, 'context': {
+                    'changeName': 'Title',
+                    'internal': 'What the user sees',
+                }},
+            ]},
+            ComplexParameter(name='Custom parameter group (reciprocal values)'),
+            ScalableGroup(name="Expandable Parameter Group", tip='Click to add children', children=[
+                {'name': 'ScalableParam 1', 'type': 'str', 'value': "default param 1"},
+                {'name': 'ScalableParam 2', 'type': 'str', 'value': "default param 2"},
+            ]),
+        ]
+
+        ## Create tree of Parameter objects
+        p = Parameter.create(name='params', type='group', children=params)
+        self._parameterTree.setParameters(p,showTop=False)
         
 
 # 测试图整体窗口封装类
@@ -107,10 +221,13 @@ class TestGraphicsView(QWidget):
     
     def setUI(self):
         self.layout=QHBoxLayout(self)
-        self._graphCanvas=TestGraphCanvas(self)
-        self.layout.addWidget(self._graphCanvas)
-        self.layout.addWidget(QLabel(self))
+        self._graphCanvas=TestGraphCanvas(self,self._graphData)
+        self._propertyPanel=TestGraphPropertyPanel(self,self._graphData)
+        self.layout.addWidget(self._graphCanvas,120)
+        self.layout.addWidget(self._propertyPanel,40)
         self._graphCanvas.draw(self._graphCanvas)
+        # 连接图和属性列表
+        self._graphCanvas.canvasSelectionChanged.connect(self._propertyPanel.onSelectionChanged)
     
 
 class GraphMainWindow(QMainWindow):
