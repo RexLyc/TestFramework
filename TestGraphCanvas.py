@@ -12,12 +12,25 @@ from TestGraphCanvasNode import BaseMiddleGraphNode, BorderGraphItem,BorderGraph
 import pyqtgraph.parametertree.parameterTypes as pTypes
 from pyqtgraph.parametertree import Parameter, ParameterTree
 
+import importlib
+import graph.node.BaseNode as bs
 
 pg.setConfigOptions(background='w')
 pg.setConfigOptions(crashWarning=True)
 pg.setConfigOptions(exitCleanup=True)
 
-
+class TestGraphNodeRegister:
+    def __init__(self):
+        self.mods=[]
+    
+    def registerNode(self,name,package):
+        self.mods.append(importlib.import_module(name,package))
+    
+    def getNodeClassify(self):
+        for m in self.mods:
+            classify=m.getClassify()
+            
+        
 
 ## test subclassing parameters
 ## This parameter automatically generates two child parameters which are always reciprocals of each other
