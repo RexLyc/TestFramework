@@ -286,8 +286,8 @@ new_sam_graph = [
         ,'id':'tpu_read'
         ,'dev':'out_tpu'
         ,'in': 'tpu_read_code'
-        ,'preRun':['pack_tpu']
-        ,'postRun':['unpack_tpu']
+        ,'preRun':['pack_tpu','log']
+        ,'postRun':['unpack_tpu','log']
         ,'out':'tpu_status'
         ,'prev':'sam'
         ,'next':'tpu_status_extract'
@@ -393,7 +393,7 @@ new_sam_graph = [
     ,{
         'type':'constant'
         ,'id':'command_to_sam'
-        ,'data':[0x02,0x00,0x00,0x00,0x1c,0x80,0x00,0x00,0x00,0x12,0x00,0x00,0x3c,0x00,0x00,0xbe,0x99,0x00,0x00,0x00,0x0c,0x50,0x00,0x00,0x00,0x00,0xd1,0x03,0x86,0x07,0x00,0x80,0x90,0x8a,0x03]
+        ,'data':[0x53,0x44,0x73,0x45,0x73,0x00,0x00,0x00,0x00,0x0E,0x10,0x04,0xAA,0xAA,0xAA,0x96,0x69,0x00,0x03,0x30,0x01,0x32,0x1A,0x99]
     }
     ,{
         'type':'variable'
@@ -414,63 +414,66 @@ new_sam_graph = [
         ,'id':'send_to_sam'
         ,'dev':'out_sam'
         ,'in': 'command_to_sam'
-        # ,'preRun':['log']
+        ,'preRun':['log']
         # ,'postRun':['log']
         ,'out':'recv_from_sam'
         ,'prev':'b_card_status_condition'
         ,'next':'sam_output_extract'
         ,'out_policy': {
             'timeout':2.0
-            ,'type':'stx_multi_length'
+            ,'type':'length'
             ,'escape':None
-            ,'length_map':{
-                0xDD:{
-                    # 去除首字节后的下标,额外长度
-                    'begin':0
-                    ,'end':2
-                    ,'basic_len':0
-                }
-                ,0x02:{
-                    # 去除首字节后的下标
-                    'begin':0
-                    ,'end':4
-                    ,'basic_len':2
-                }
-            }
+            ,'begin':6
+            ,'end':10
+            ,'basic_len':0
         }
     }
-    # 提取首字节用于判断是否完成通信
+    # 提取多个字节用于判断是否完成通信
     ,{
-        'type':'byte_extract'
+        'type':'bytes_extract'
         ,'id':'sam_output_extract'
         ,'in':'recv_from_sam'
-        ,'offset':0
+        ,'begin':13
+        ,'end':16
         ,'out':'recv_from_sam_short'
+        ,'postRun':['bytes_to_upper_str']
         ,'prev':'send_to_sam'
         ,'next':'tpu_sam_condition'
     }
     # sam返回状态判断和跳转
     ,{
-        'type':'const_condition_node'
+        'type':'const_condition_default_node'
         ,'id':'tpu_sam_condition'
         ,'in':'recv_from_sam_short'
         ,'out':'sam_tpu_status_id'
         ,'prev':'sam_output_extract'
         ,'next':{
-            'DD':'send_to_tpu' # 判断条件目前是大小写敏感的
-            ,'02':'end'
+            'AAAAAA':'end' # 判断条件目前是大小写敏感的
+            ,'default':'extract_new_sam_data_bytes' # 默认条目
         }
+    }
+    # 提取数据部分用于判断是否完成通信
+    ,{
+        'type':'bytes_extract'
+        ,'id':'extract_new_sam_data_bytes'
+        ,'in':'recv_from_sam'
+        ,'begin':13
+        ,'end':20
+        ,'preRun':['log']
+        ,'out':'data_recv_from_sam'
+        ,'prev':'tpu_sam_condition'
+        ,'next':'send_to_tpu'
     }
     # sam数据发到tpu
     ,{
         'type':'com_node'
         ,'id':'send_to_tpu'
         ,'dev':'out_tpu'
-        ,'in': 'recv_from_sam'
+        ,'in': 'data_recv_from_sam'
         # ,'preRun':['log','sam_to_tpu','log','pack_tpu','log'] # 按顺序执行各个预处理
         # ,'postRun':['log','unpack_tpu','log','tpu_to_sam','log'] # 按顺序执行各个后处理
-        ,'preRun':['sam_to_tpu','pack_tpu'] # 按顺序执行各个预处理
-        ,'postRun':['unpack_tpu','tpu_to_sam'] # 按顺序执行各个后处理
+        ,'preRun':['new_sam_to_tpu','pack_tpu','log'] # 按顺序执行各个预处理
+        ,'postRun':['unpack_tpu','tpu_to_sam','pack_new_sam'] # 按顺序执行各个后处理
         ,'out':'command_to_sam'
         ,'prev':'tpu_sam_condition'
         ,'out_policy': {

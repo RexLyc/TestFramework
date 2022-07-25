@@ -100,6 +100,23 @@ class RunToolFunc:
             result.insert(0,(total_length&0xff00)>>8)
             result.insert(0,total_length&0x00ff)
             return result
+        
+        def new_sam_to_tpu(data):
+            '''
+            input：sam透传数据，不包含长度字段
+            output：等待打成tpu包的数据，不包含校验、头尾、转义字符
+            '''
+            sam_length=len(data)
+            result=[]
+            result.extend([0x32,0x54,0x00,0x20,0x22,0x07,0x07,0x14,0x11,0x00])
+            # Moto 序
+            result.append((sam_length&0xff00)>>8)
+            result.append(sam_length&0x00ff)
+            result.extend(data)
+            total_length=len(result)
+            result.insert(0,(total_length&0xff00)>>8)
+            result.insert(0,total_length&0x00ff)
+            return result
 
         def tpu_to_sam(data):
             sam_length=(data[12]<<8)+data[13]
@@ -112,6 +129,7 @@ class RunToolFunc:
             result.append(0x00)
             result.extend(data[14:])
             return result
+
         def bytes_to_list(data):
             if isinstance(data,bytes):
                 temp = []
@@ -206,6 +224,8 @@ class RunToolFunc:
             return unpack_new_sam
         elif name=='bytes_to_upper_str':
             return bytes_to_upper_str
+        elif name=='new_sam_to_tpu':
+            return new_sam_to_tpu
         else:
             return None
 
@@ -263,7 +283,7 @@ class ErrorNode(Node):
 
 class ConditionNode(Node):
     pass
-class ConstantContitionNode(ConditionNode):
+class ConstantConditionNode(ConditionNode):
     def __init__(self,data_zone,node):
         super().__init__(data_zone=data_zone,node=node)
     
@@ -274,6 +294,18 @@ class ConstantContitionNode(ConditionNode):
                 self.data_zone[self.node['out']]=value
                 return
         self.data_zone[self.node['out']]='error'
+
+class ConstantConditionDefaultNode(ConditionNode):
+    def __init__(self,data_zone,node):
+        super().__init__(data_zone=data_zone,node=node)
+    
+    def _run(self):
+        # 查看跳转条件
+        for (key,value) in self.node['next'].items():
+            if self.data_zone[self.node['in']]==key:
+                self.data_zone[self.node['out']]=value
+                return
+        self.data_zone[self.node['out']]=self.node['next']['default']
 
 class TestError:
     def noSuchSTX():
@@ -441,9 +473,10 @@ class BytesExtract(Node):
         super().__init__(data_zone=data_zone,node=node)
     
     def _run(self):
-        self.data_zone[self.node['out']]=''
+        temp=[]
         for i in range(self.node['begin'],self.node['end']):
-            self.data_zone[self.node['out']].append(self.data_zone[self.node['in']][i])
+            temp.append(self.data_zone[self.node['in']][i])
+        self.data_zone[self.node['out']]=temp
 
 class InfoNode(Node):
     def __init__(self,data_zone,node):
@@ -471,9 +504,13 @@ class NodeFactory:
         elif graph_node['type']=='end':
             return EndNode()
         elif graph_node['type']=='const_condition_node':
-            return ConstantContitionNode(data_zone=global_data,node=graph_node)
+            return ConstantConditionNode(data_zone=global_data,node=graph_node)
         elif graph_node['type']=='byte_extract':
             return ByteExtract(data_zone=global_data,node=graph_node)
+        elif graph_node['type']=='bytes_extract':
+            return BytesExtract(data_zone=global_data,node=graph_node)
+        elif graph_node['type']=='const_condition_default_node':
+            return ConstantConditionDefaultNode(data_zone=global_data,node=graph_node)
         else:
             print('unsupport node,pass',graph_node)
 
