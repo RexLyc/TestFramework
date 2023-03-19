@@ -10,6 +10,9 @@
     "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@element-plus/icons-vue": "^2.1.0",
+    "drawflow": "^0.0.59",
+    "element-plus": "^2.3.1",
     "pinia": "^2.0.32",
     "url": "^0.11.0",
     "vue": "^3.2.47",
