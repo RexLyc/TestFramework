@@ -1,0 +1,3 @@
+[submodule "TestFrameworkFront/Drawflow"]
+	path = TestFrameworkFront/Drawflow
+	url = git@github.com:RexLyc/Drawflow.git

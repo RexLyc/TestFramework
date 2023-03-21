@@ -1,10 +1,13 @@
 <script setup lang="ts">
 
 import { h, getCurrentInstance, render, onMounted } from 'vue'
-import Drawflow from 'drawflow'
+// import Drawflow from 'drawflow'
+// import 'drawflow/dist/drawflow.min.css'
 // 两个都要引入
-import 'drawflow/dist/drawflow.min.css'
+import '@/../Drawflow/src/drawflow.css'
+import Drawflow from '@/../Drawflow/src/drawflow.js'
 import '@/assets/custom-drawflow.css'
+
 import * as tn from  '@/TestNode'
 
 var editor: Drawflow;
@@ -36,11 +39,11 @@ onMounted(()=>{
 const initTestGraph = ()=>{
   graph = tn.TestGraphFactory.buildTestGraph("test")
   tn.NodeFactory.addTestNode(graph,tn.BeginNode.typeName,100,100);
-  tn.NodeFactory.addTestNode(graph,tn.BeginNode.typeName,100,200);
+  tn.NodeFactory.addTestNode(graph,tn.EndNode.typeName,100,200);
   for(let node of graph.nameNodeMap.values()){
     editor.addNode(node.name
-      ,node.inputs.length
-      ,node.outputs.length
+      ,node.inputs
+      ,node.outputs
       ,node.pos_x
       ,node.pos_y
       ,node.className

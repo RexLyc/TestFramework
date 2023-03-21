@@ -2,6 +2,19 @@
 import FlowCanvas from '../components/FlowCanvas.vue'
 import HeadMenu from '../components/HeadMenu.vue'
 import TestNodeMenu from '../components/TestNodeMenu.vue'
+
+document.onmousedown=(event)=>{
+  console.log("hello from document")
+}
+
+document.onmouseup=(event)=>{
+
+}
+
+document.onmousemove=(event)=>{
+
+}
+
 </script>
 
 <template>

@@ -6,87 +6,87 @@ import {
     Menu as IconMenu,
     Location,
     Setting,
+WindPower,
+MostlyCloudy,
+Switch,
+Paperclip,
 } from '@element-plus/icons-vue'
-import { onMounted } from 'vue';
+import type { NodeTypes } from '@vue/compiler-core';
+import type { useCursor } from 'element-plus';
+import { method } from 'lodash';
+import {ref, onMounted } from 'vue';
+import { Vue } from 'vue-demi';
 
-const menuData = [
-    {
-        index:'/',
-        icon:'el-icon-menu',
-        title:'通用类型',
-        id:1,
-        children:[
-            {
-                index:'/one',
-                title:'起始',
-                id:2-1,
-            },
-            {
-                index:'/two',
-                title:'结束',
-                id:2-2,
-            },
-        ]
-    },
-    {
-        index:'/one',
-        icon:'el-icon-menu',
-        title:'串口类型',
-        id:2,
-        children:[
-            {
-                index:'/one',
-                title:'串口1',
-                id:2-1,
-            },
-            {
-                index:'/two',
-                title:'串口2',
-                id:2-2,
-            },
-        ]
+const menuData = ref(new Array());
+
+class NodeMenuItem {
+    index:String;
+    children:Array<NodeMenuItem>;
+    constructor(index:String,children:Array<NodeMenuItem>){
+        this.index=index;
+        this.children=children;
     }
-];
-
-const handleOpen = (key: string, keyPath: string[]) => {
-    console.log(key, keyPath)
-}
-const handleClose = (key: string, keyPath: string[]) => {
-    console.log(key, keyPath)
 }
 
 onMounted(()=>{
     // 加载全部的节点
-    for(let type of tn.NodeFactory.nodeTypeMap.entries()){
-        menuData.push
+    const categorySet = new Map<string,Array<tn.TypeToken>>();
+    for(let type of tn.NodeFactory.nodeTypeMap.values()){
+        if(!categorySet.get(type.categoryName))
+            categorySet.set(type.categoryName,new Array());
+        categorySet.get(type.categoryName)?.push(type)
+    }
+    for(let categoryName of categorySet.keys()){
+        const typeArray = new Array<NodeMenuItem>();
+        for(let type of categorySet.get(categoryName)!.values()){
+            typeArray.push(new NodeMenuItem(type.typeName,[]));
+        }
+        const tempItem = new NodeMenuItem(categoryName,typeArray);
+        menuData.value.push(tempItem)
     }
 })
+
 </script>
 
 <template>
     <el-menu
         default-active="2"
         class="el-menu-vertical-demo"
-        @open="handleOpen"
-        @close="handleClose"
     >
-        
+
         <template v-for="item in menuData">
-            <el-menu-item v-bind:key="item" :index="item.index" v-if="item.children==undefined">
+            <el-menu-item v-bind:key="item" :index="item.index" v-if="item.children==undefined || item.children.length==0">
                 <template #title>
-                    <!--<i :class="item.icon"></i> -->
                     <span>{{ item.title }}</span>
                 </template>
             </el-menu-item>
 
-            <el-sub-menu v-bind:key="item" :index="item.index" v-if="item.children!=undefined">
+            <el-sub-menu v-bind:key="item" :index="item.index" v-if="item.children!=undefined && item.children.length!=0">
                 <template #title>
-                    <!--<i :class="item.icon"></i> -->
-                    <span>{{ item.title }}</span>
+                    <el-icon v-if="item.index==tn.CategoryEnums.CommonType"><Star/></el-icon>
+                    <el-icon v-if="item.index==tn.CategoryEnums.WebType"><MostlyCloudy/></el-icon>
+                    <el-icon v-if="item.index==tn.CategoryEnums.FlowType"><Switch/></el-icon>
+                    <el-icon v-if="item.index==tn.CategoryEnums.SerialType"><Link/></el-icon>
+                    <span>{{tn.NodeTranslator.translate(item.index)}}</span>
                 </template>
                 <template v-for="item2 in item.children" >
-                    <el-menu-item :index="item2.index" v-bind:key="item2" v-if="true">
-                        {{ item2.title }}
+                    <el-menu-item :index="item2.index" v-bind:key="item2" v-if="true" onmousedown="console.log(event.srcElement)">
+                        <el-icon v-if="item2.index==tn.BeginNode.typeName" ><Position /></el-icon>
+                        <el-icon v-if="item2.index==tn.EndNode.typeName"><SwitchButton /></el-icon>
+                        <el-icon v-if="item2.index==tn.LogNode.typeName"><Document /></el-icon>
+                        <el-icon v-if="item2.index==tn.ExtractNode.typeName"><Scissor /></el-icon>
+                        <el-icon v-if="item2.index==tn.MergeNode.typeName"><Paperclip /></el-icon>
+                        <el-icon v-if="item2.index==tn.GlobalNode.typeName"><Setting /></el-icon>
+                        <el-icon v-if="item2.index==tn.SendNode.typeName"><Ship /></el-icon>
+                        <el-icon v-if="item2.index==tn.RecvNode.typeName"><Box /></el-icon>
+                        <el-icon v-if="item2.index==tn.HttpNode.typeName"><ChromeFilled /></el-icon>
+                        <el-icon v-if="item2.index==tn.TCPNode.typeName"><PhoneFilled /></el-icon>
+                        <el-icon v-if="item2.index==tn.UDPNode.typeName"><PhoneFilled /></el-icon>
+                        <el-icon v-if="item2.index==tn.WebSocketNode.typeName"><PhoneFilled /></el-icon>
+                        <el-icon v-if="item2.index==tn.SerialNode.typeName"><MagicStick /></el-icon>
+                        <el-icon v-if="item2.index==tn.IfNode.typeName"><Guide /></el-icon>
+                        <el-icon v-if="item2.index==tn.SwitchNode.typeName"><List /></el-icon>
+                        <span :id="item2.index">{{tn.NodeTranslator.translate(item2.index)}}</span>
                     </el-menu-item>
                 </template>
             </el-sub-menu>
@@ -95,3 +95,8 @@ onMounted(()=>{
     </el-menu>
 </template>
 
+<style scoped>
+.el-menu-item>span {
+    cursor: move;
+}
+</style>
