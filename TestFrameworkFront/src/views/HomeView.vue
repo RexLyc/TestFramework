@@ -35,7 +35,7 @@ document.onmouseup=(event)=>{
     return true;
   if(beginPressed.value==true&&beginDrag.value==true){
     //
-    console.log('create node: ',beginPressed,beginDrag);
+    // console.log('create node: ',beginPressed,beginDrag);
     newNode.value=pressedElementStore.currentPressedElement.id;
     posX.value=event.x;
     posY.value=event.y;
@@ -60,7 +60,7 @@ document.onmousemove=(event)=>{
       dragDiv.value.style.position='fixed';
       // 随便挂在某个节点下面
       pressedElementStore.currentPressedElement.appendChild(dragDiv.value);
-      console.log('create div: %o %o',pressedElementStore.currentPressedElement.innerHTML,dragDiv.value);
+      // console.log('create div: %o %o',pressedElementStore.currentPressedElement.innerHTML,dragDiv.value);
     }
     dragDiv.value.style.top=event.clientY+'px';
     dragDiv.value.style.left=event.clientX+'px';
