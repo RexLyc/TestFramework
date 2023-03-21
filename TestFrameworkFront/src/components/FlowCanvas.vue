@@ -1,6 +1,6 @@
 <script setup lang="ts">
 
-import { h, getCurrentInstance, render, onMounted } from 'vue'
+import { h, getCurrentInstance, render, onMounted, watch } from 'vue'
 // import Drawflow from 'drawflow'
 // import 'drawflow/dist/drawflow.min.css'
 // 两个都要引入
@@ -9,38 +9,51 @@ import Drawflow from '@/../Drawflow/src/drawflow.js'
 import '@/assets/custom-drawflow.css'
 
 import * as tn from  '@/TestNode'
+import { transform } from 'lodash'
 
-var editor: Drawflow;
-var graph:tn.TestGraph;
+let editor: Drawflow;
+let graph:tn.TestGraph;
+let transformX:number=0,transformY: number=0;
+
+const props = defineProps({
+  newNode: String,
+  pos_x:Number,
+  pos_y:Number
+})
+
+watch(props,()=>{
+  // 需要计算canvas 左上角、transform、scale
+  const drawflowParent:HTMLElement = document.getElementById('drawflow')!;
+  const drawflowCanvas:HTMLElement = drawflowParent.firstElementChild;
+  let left =  props.pos_x! - drawflowParent.offsetLeft ;
+  let top = props.pos_y! - drawflowParent.offsetTop;
+  const canvasWidth = drawflowCanvas.clientWidth;
+  const canvasHeight = drawflowCanvas.clientHeight;
+  // console.log(left,top,canvasWidth,canvasHeight,editor.zoom,transformX,transformY)
+  // 插入时需要还原成未缩放、未平移之前的坐标
+  left -= transformX;
+  top -= transformY;
+  var distX = canvasWidth/2 - left;
+  var distY = canvasHeight/2 - top;
+  distX/=editor.zoom;
+  distY/=editor.zoom;
+  left=canvasWidth/2-distX;
+  top=canvasHeight/2-distY;
+  tn.NodeFactory.addTestNode(graph,props.newNode!,left,top);
+})
 
 onMounted(()=>{
   const Vue = { version: 3, h, render };
   var id = document.getElementById("drawflow");
-  // const internalInstance = getCurrentInstance()
-  // editor = new Drawflow(id, Vue, internalInstance.appContext.app._context);
   editor = new Drawflow(id, Vue);
   editor.start();
 
-  // const data = {
-  //   name: 'haha',
-  //   age:'2'
-  // };
-  // editor.zoom_min=0.3;
-  // editor.addNode('foo', 1, 2, 100, 200, 'foo', data, 'Foo');
-  // editor.addNode('bar', 1, 1, 400, 100, 'bar', data, 'Bar A');
-  // editor.addNode('bar', 1, 1, 400, 300, 'bar', data, 'Bar B');
-
-  // editor.addConnection(1, 2, "output_1", "input_1");
-  // editor.addConnection(1, 3, "output_1", "input_1");
-  initTestGraph();
-
-})
-
-const initTestGraph = ()=>{
-  graph = tn.TestGraphFactory.buildTestGraph("test")
-  tn.NodeFactory.addTestNode(graph,tn.BeginNode.typeName,100,100);
-  tn.NodeFactory.addTestNode(graph,tn.EndNode.typeName,100,200);
-  for(let node of graph.nameNodeMap.values()){
+  addEventListener('TGAddNewNode',(event:Event)=>{
+    const newNode:tn.TGAddNewNode = event.detail;
+    const node:tn.BaseNode = tn.TestGraphFactory
+      .getTestGraph(newNode.testGraph)
+      .nameNodeMap
+      .get(newNode.nodeName)!;
     editor.addNode(node.name
       ,node.inputs
       ,node.outputs
@@ -49,8 +62,21 @@ const initTestGraph = ()=>{
       ,node.className
       ,node.data
       ,node.html)
-  }
-  console.log(graph.nameNodeMap)
+  });
+
+  editor.on('translate',(pos:{x:number,y:number})=>{
+    transformX = pos.x;
+    transformY = pos.y;
+    // console.log(transformX,transformY)
+  })
+  initTestGraph();
+
+})
+
+const initTestGraph = ()=>{
+  graph = tn.TestGraphFactory.buildTestGraph("test")
+  tn.NodeFactory.addTestNode(graph,tn.BeginNode.typeName,100,100);
+  tn.NodeFactory.addTestNode(graph,tn.EndNode.typeName,500,100);
 }
 
 const drawflowKeyDown = (event:KeyboardEvent)=>{
@@ -68,6 +94,8 @@ const drawflowKeyDown = (event:KeyboardEvent)=>{
     editor.pos_y_start = 0;
     editor.mouse_x = 0;
     editor.mouse_y = 0;
+    transformX=0;
+    transformY=0;
   }
 }
 

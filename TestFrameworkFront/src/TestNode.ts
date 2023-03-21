@@ -1,5 +1,10 @@
 // 编写全部和测试节点相关的内容
 
+export interface TGAddNewNode {
+    testGraph:string,
+    nodeName:string,
+}
+
 export class TestGraph {
     public graphName;
     public nameCountMap; 
@@ -397,6 +402,11 @@ export class NodeFactory {
         ,pos_y:number){
         const nodeName = testGraph.newNodeName(nodeType.typeName)
         testGraph.addNode(nodeType.build(nodeName,pos_x,pos_y))
+        const newNodeEvent = new CustomEvent('TGAddNewNode',{'detail': {
+            testGraph:testGraph.graphName,
+            nodeName:nodeName,
+        }});
+        dispatchEvent(newNodeEvent);
     }
 
     static addTestNode(testGraph:TestGraph
@@ -431,10 +441,15 @@ export class TypeTool {
 // 测试图工厂，负责创建测试图
 export class TestGraphFactory {
     private constructor(){}
+    static testGraphMap:Map<string,TestGraph>=new Map();
+    static getTestGraph(graphName:string): TestGraph {
+        return this.testGraphMap.get(graphName);
+    }
 
     // graphName 图名称
     static buildTestGraph(graphName:string): TestGraph{
-        return new TestGraph(graphName)
+        this.testGraphMap.set(graphName,new TestGraph(graphName))
+        return this.testGraphMap.get(graphName)!;
     }
 }
 

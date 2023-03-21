@@ -1,23 +1,11 @@
   
 <script lang="ts" setup>
 import * as tn from '@/TestNode';
-import {
-    Document,
-    Menu as IconMenu,
-    Location,
-    Setting,
-WindPower,
-MostlyCloudy,
-Switch,
-Paperclip,
-} from '@element-plus/icons-vue'
-import type { NodeTypes } from '@vue/compiler-core';
-import type { useCursor } from 'element-plus';
-import { method } from 'lodash';
 import {ref, onMounted } from 'vue';
-import { Vue } from 'vue-demi';
+import {usePressElementStore} from '@/stores/counter'
 
 const menuData = ref(new Array());
+const pressedElementStore = usePressElementStore();
 
 class NodeMenuItem {
     index:String;
@@ -46,6 +34,10 @@ onMounted(()=>{
     }
 })
 
+function mousedown(event) {
+    pressedElementStore.setCurrent(event.srcElement);
+}
+
 </script>
 
 <template>
@@ -70,7 +62,7 @@ onMounted(()=>{
                     <span>{{tn.NodeTranslator.translate(item.index)}}</span>
                 </template>
                 <template v-for="item2 in item.children" >
-                    <el-menu-item :index="item2.index" v-bind:key="item2" v-if="true" onmousedown="console.log(event.srcElement)">
+                    <el-menu-item :index="item2.index" v-bind:key="item2" v-if="true" @mousedown="mousedown">
                         <el-icon v-if="item2.index==tn.BeginNode.typeName" ><Position /></el-icon>
                         <el-icon v-if="item2.index==tn.EndNode.typeName"><SwitchButton /></el-icon>
                         <el-icon v-if="item2.index==tn.LogNode.typeName"><Document /></el-icon>
