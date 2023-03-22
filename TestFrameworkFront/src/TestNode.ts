@@ -1,10 +1,13 @@
 // 编写全部和测试节点相关的内容
 
+
 export interface TGAddNewNode {
     testGraph:string,
     nodeName:string,
 }
 
+
+// 测试图对象，管理所有测试节点
 export class TestGraph {
     public graphName;
     public nameCountMap; 
@@ -31,21 +34,44 @@ export class TestGraph {
     }
 }
 
+
+
+export interface Type<T = any> extends Function {
+    new (...args: any[]):T;
+}
+
+// 允许自定义新的Param种类
 export interface ParamInterface {
-    paramName:string;
-    paramType: new ()=>{};
-    paramValue: any;
+    paramName: string;
+    paramType: Type;
+    paramValue: Array<any>;
 }
 
-export interface InputInterface {
-    name: String;
-    params?: Array<ParamInterface>;
+export class Param implements ParamInterface{
+    paramName: string;
+    paramType: Type;
+    paramValue: Array<Type>;
+    constructor(name:string,type:Type,value:Array<InstanceType<Type>>){
+        this.paramName=name;
+        this.paramType=type;
+        this.paramValue=value;
+    }
 }
 
-export interface OutputInterface {
-    name: String;
-    value?: String;
-    type?: any;
+// 必须满足的InOut参数要求
+export interface InOutParamsInterface {
+    params: Array<ParamInterface>;
+}
+
+export class InOutParams {
+    params: Array<ParamInterface>;
+    constructor(){
+        this.params=new Array();
+    }
+    addParam(param:ParamInterface):InOutParams{
+        this.params.push(param);
+        return this;
+    }
 }
 
 export class BaseNode {
@@ -62,8 +88,8 @@ export class BaseNode {
 
 
     constructor(name: string
-        ,inputs:Array<InputInterface>
-        ,outputs:Array<OutputInterface>
+        ,inputs:InOutParamsInterface
+        ,outputs:InOutParamsInterface
         ,pos_x:number
         ,pos_y:number
         ,className:string
@@ -95,7 +121,8 @@ export enum CategoryEnums {
     CommonType = "CommonType",          // 通用节点
     WebType = "WebType",                // 网络测试节点
     SerialType = "SerialType",          // 串口测试节点
-    FlowType = "FlowType"               // 流程控制节点
+    FlowType = "FlowType",              // 流程控制节点
+    MathType = "MathType",              // 数理运算节点
 }
 
 export const basicTranslate:Map<string,string> = new Map();
@@ -119,6 +146,10 @@ basicTranslate.set("WebSocketNode","WebSocket连接节点");
 basicTranslate.set("SerialNode","串口连接节点");
 basicTranslate.set("IfNode","条件跳转节点");
 basicTranslate.set("SwitchNode","Switch跳转节点");
+basicTranslate.set("ConstantNode","常量节点");
+basicTranslate.set("AddMinusNode","加减法节点");
+basicTranslate.set("MultiDivNode","乘除法节点");
+basicTranslate.set("AddNode","加法节点");
 
 
 export class NodeTranslator {
@@ -136,14 +167,36 @@ export class NodeTranslator {
     }
 }
 
+
+// 常量
+export class ConstantNode {
+    static categoryName = CategoryEnums.CommonType;
+    static typeName = "ConstantNode";
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const outputs = new InOutParams();
+        outputs.addParam(new Param("data",String,[""]));
+        const temp = new BaseNode(nodeName
+            ,new InOutParams()
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,BeginNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
+
 // 测试起点
 export class BeginNode {
     static categoryName = CategoryEnums.CommonType;
     static typeName = "BeginNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const outputs = new InOutParams();
+        outputs.addParam(new Param("next",String,[""]));
         const temp = new BaseNode(nodeName
-            ,[]
-            ,[{name:"next"}]
+            ,new InOutParams()
+            ,outputs
             ,pos_x
             ,pos_y
             ,BeginNode.typeName
@@ -158,9 +211,11 @@ export class EndNode{
     static categoryName = CategoryEnums.CommonType;
     static typeName = "EndNode";
     static build(nodeName:string, pos_x:number,pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(new Param("prev",String,[""]));
         const temp = new BaseNode(nodeName
-            ,[{name:"prev"}]
-            ,[]
+            ,inputs
+            ,new InOutParams()
             ,pos_x
             ,pos_y
             ,EndNode.typeName
@@ -175,9 +230,11 @@ export class LogNode {
     static categoryName = CategoryEnums.CommonType;
     static typeName = "LogNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
-            ,[{name:"data"}]
-            ,[]
+            ,inputs
+            ,new InOutParams()
             ,pos_x
             ,pos_y
             ,LogNode.typeName
@@ -192,9 +249,17 @@ export class ExtractNode {
     static categoryName = CategoryEnums.CommonType;
     static typeName = "ExtractNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(new Param("prev",String,[""]))
+            .addParam(new Param("data",String,[""]))
+            .addParam(new Param("begin",Number,[0]))
+            .addParam(new Param("end",Number,[0]));
+        const outputs = new InOutParams();
+        outputs.addParam(new Param("next",String,[""]))
+            .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
-            ,[{name:"prev"},{name:"data"},{name:"begin"},{name:"end"}]
-            ,[{name:"next"},{name:"data"}]
+            ,inputs
+            ,outputs
             ,pos_x
             ,pos_y
             ,ExtractNode.typeName
@@ -209,9 +274,16 @@ export class MergeNode {
     static categoryName = CategoryEnums.CommonType;
     static typeName = "MergeNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(new Param("prev",String,[""]))
+            .addParam(new Param("data_1",String,[""]))
+            .addParam(new Param("data_2",String,[""]));
+        const outputs = new InOutParams();
+        outputs.addParam(new Param("next",String,[""]))
+            .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
-            ,[{name:"prev"},{name:"data_1"},{name:"data_2"}]
-            ,[{name:"next"},{name:"data"}]
+            ,inputs
+            ,outputs
             ,pos_x
             ,pos_y
             ,MergeNode.typeName
@@ -226,9 +298,13 @@ export class GlobalNode {
     static categoryName = CategoryEnums.CommonType;
     static typeName = "GlobalNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(new Param("data",String,[""]));
+        const outputs = new InOutParams();
+        outputs.addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
-            ,[]
-            ,[]
+            ,inputs
+            ,outputs
             ,pos_x
             ,pos_y
             ,GlobalNode.typeName
@@ -243,9 +319,17 @@ export class SendNode {
     static categoryName = CategoryEnums.CommonType;
     static typeName = "SendNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(new Param("prev",String,[""]))
+            .addParam(new Param("file",String,[""])) 
+            .addParam(new Param("data",String,[""]))
+            .addParam(new Param("timeout",Number,[5000]));
+        const outputs = new InOutParams();
+        outputs.addParam(new Param("next",String,[""]))
+            .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
-            ,[{name:"prev"},{name:"data"}]
-            ,[{name:"next"},{name:"data"}]
+            ,inputs
+            ,outputs
             ,pos_x
             ,pos_y
             ,SendNode.typeName
@@ -260,9 +344,17 @@ export class RecvNode {
     static categoryName = CategoryEnums.CommonType;
     static typeName = "RecvNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(new Param("prev",String,[""]))
+            .addParam(new Param("file",String,[""])) 
+            .addParam(new Param("data",String,[""]))
+            .addParam(new Param("timeout",Number,[5000]));
+        const outputs = new InOutParams();
+        outputs.addParam(new Param("next",String,[""]))
+            .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
-            ,[{name:"prev"},{name:"data"}]
-            ,[{name:"next"},{name:"data"}]
+            ,inputs
+            ,outputs
             ,pos_x
             ,pos_y
             ,RecvNode.typeName
@@ -277,9 +369,15 @@ export class HttpNode {
     static categoryName = CategoryEnums.WebType;
     static typeName = "HttpNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(new Param("prev",String,[""]))
+            .addParam(new Param("data",String,[""]));
+        const outputs = new InOutParams();
+        outputs.addParam(new Param("next",String,[""]))
+            .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
-            ,[{name:"prev"},{name:"data"}]
-            ,[{name:"next"},{name:"data"}]
+            ,inputs
+            ,outputs
             ,pos_x
             ,pos_y
             ,HttpNode.typeName
@@ -294,9 +392,15 @@ export class TCPNode {
     static categoryName = CategoryEnums.WebType;
     static typeName = "TCPNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(new Param("prev",String,[""]))
+            .addParam(new Param("data",String,[""]));
+        const outputs = new InOutParams();
+        outputs.addParam(new Param("next",String,[""]))
+            .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
-            ,[{name:"prev"},{name:"data"}]
-            ,[{name:"next"},{name:"data"}]
+            ,inputs
+            ,outputs
             ,pos_x
             ,pos_y
             ,TCPNode.typeName
@@ -311,9 +415,15 @@ export class UDPNode {
     static categoryName = CategoryEnums.WebType;
     static typeName = "UDPNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(new Param("prev",String,[""]))
+            .addParam(new Param("data",String,[""]));
+        const outputs = new InOutParams();
+        outputs.addParam(new Param("next",String,[""]))
+            .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
-            ,[{name:"prev"},{name:"data"}]
-            ,[{name:"next"},{name:"data"}]
+            ,inputs
+            ,outputs
             ,pos_x
             ,pos_y
             ,UDPNode.typeName
@@ -328,9 +438,15 @@ export class WebSocketNode {
     static categoryName = CategoryEnums.WebType;
     static typeName = "WebSocketNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(new Param("prev",String,[""]))
+            .addParam(new Param("data",String,[""]));
+        const outputs = new InOutParams();
+        outputs.addParam(new Param("next",String,[""]))
+            .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
-            ,[{name:"prev"},{name:"data"}]
-            ,[{name:"next"},{name:"data"}]
+            ,inputs
+            ,outputs
             ,pos_x
             ,pos_y
             ,WebSocketNode.typeName
@@ -350,9 +466,16 @@ export class SerialNode {
     static categoryName = CategoryEnums.SerialType;
     static typeName = "SerialNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(new Param("prev",String,[""]))
+            .addParam(new Param("baudrate",Number,[9000]))
+            .addParam(new Param("port",String,["COM0"]));
+        const outputs = new InOutParams();
+        outputs.addParam(new Param("next",String,[""]))
+            .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
-            ,[{name:"prev"},{name:"option",type:SerialOptionType}]
-            ,[{name:"next"},{name:"data"}]
+            ,inputs
+            ,outputs
             ,pos_x
             ,pos_y
             ,SerialNode.typeName
@@ -367,9 +490,15 @@ export class IfNode {
     static categoryName = CategoryEnums.FlowType;
     static typeName = "IfNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(new Param("prev",String,[""]))
+            .addParam(new Param("data",String,[""]));
+        const outputs = new InOutParams();
+        outputs.addParam(new Param("next",String,[""]))
+            .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
-            ,[{name:"prev"},{name:"data"}]
-            ,[{name:"next"},{name:"data"}]
+            ,inputs
+            ,outputs
             ,pos_x
             ,pos_y
             ,IfNode.typeName
@@ -384,9 +513,15 @@ export class SwitchNode {
     static categoryName = CategoryEnums.FlowType;
     static typeName = "SwitchNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(new Param("prev",String,[""]))
+            .addParam(new Param("data",String,[""]));
+        const outputs = new InOutParams();
+        outputs.addParam(new Param("next",String,[""]))
+            .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
-            ,[{name:"prev"},{name:"data"}]
-            ,[{name:"next"},{name:"data"}]
+            ,inputs
+            ,outputs
             ,pos_x
             ,pos_y
             ,SwitchNode.typeName
@@ -465,7 +600,6 @@ export class TestGraphFactory {
     }
 }
 
-
 NodeFactory.loadNodeLibrary(BeginNode)
 NodeFactory.loadNodeLibrary(EndNode)
 NodeFactory.loadNodeLibrary(LogNode)
@@ -481,3 +615,4 @@ NodeFactory.loadNodeLibrary(WebSocketNode)
 NodeFactory.loadNodeLibrary(SerialNode)
 NodeFactory.loadNodeLibrary(IfNode)
 NodeFactory.loadNodeLibrary(SwitchNode)
+NodeFactory.loadNodeLibrary(ConstantNode);

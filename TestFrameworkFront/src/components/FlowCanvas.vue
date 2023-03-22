@@ -82,6 +82,7 @@ onMounted(()=>{
     }
     if(nodeName){
       drawer.value=true;
+      // build menu
     }
   })
   

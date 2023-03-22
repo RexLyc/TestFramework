@@ -78,6 +78,7 @@ function mousedown(event) {
                         <el-icon v-if="item2.index==tn.SerialNode.typeName"><MagicStick /></el-icon>
                         <el-icon v-if="item2.index==tn.IfNode.typeName"><Guide /></el-icon>
                         <el-icon v-if="item2.index==tn.SwitchNode.typeName"><List /></el-icon>
+                        <el-icon v-if="item2.index==tn.ConstantNode.typeName"><Lock /></el-icon>
                         <span :id="item2.index">{{tn.NodeTranslator.translate(item2.index)}}</span>
                     </el-menu-item>
                 </template>
