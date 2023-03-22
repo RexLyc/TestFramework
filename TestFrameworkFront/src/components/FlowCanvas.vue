@@ -10,6 +10,8 @@ import '@/assets/custom-drawflow.css'
 
 import * as tn from  '@/TestNode'
 import { transform } from 'lodash'
+import { ref } from 'vue'
+const drawer = ref(false)
 
 let editor: Drawflow;
 let graph:tn.TestGraph;
@@ -24,7 +26,7 @@ const props = defineProps({
 watch(props,()=>{
   // 需要计算canvas 左上角、transform、scale
   const drawflowParent:HTMLElement = document.getElementById('drawflow')!;
-  const drawflowCanvas:HTMLElement = drawflowParent.firstElementChild;
+  const drawflowCanvas:Element = drawflowParent.firstElementChild!;
   let left =  props.pos_x! - drawflowParent.offsetLeft ;
   let top = props.pos_y! - drawflowParent.offsetTop;
   const canvasWidth = drawflowCanvas.clientWidth;
@@ -69,6 +71,20 @@ onMounted(()=>{
     transformY = pos.y;
     // console.log(transformX,transformY)
   })
+  editor.on('dblclick',(e:Event)=>{
+    if(e.target==null || e.target.classList==null || e.target.classList[0] ==null)
+      return;
+    let nodeName = null;
+    if (e.target!.classList[0] == 'drawflow-node') { 
+      nodeName = (e.target as HTMLElement).getElementsByClassName('drawflow_content_node')[0].innerHTML;
+    } else if(e.target!.classList[0] == 'drawflow_content_node') {
+      nodeName = (e.target as HTMLElement).innerHTML;
+    }
+    if(nodeName){
+      drawer.value=true;
+    }
+  })
+  
   initTestGraph();
 
 })
@@ -103,6 +119,9 @@ const drawflowKeyDown = (event:KeyboardEvent)=>{
 
 <template>
   <div id="drawflow" @keydown="drawflowKeyDown"></div>
+  <el-drawer v-model="drawer" title="I am the title" :with-header="false">
+    <span>Hi there!</span>
+  </el-drawer>
 </template>
 
 <style scoped>

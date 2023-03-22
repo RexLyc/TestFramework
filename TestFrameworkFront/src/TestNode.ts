@@ -31,14 +31,21 @@ export class TestGraph {
     }
 }
 
+export interface ParamInterface {
+    paramName:string;
+    paramType: new ()=>{};
+    paramValue: any;
+}
+
 export interface InputInterface {
     name: String;
-    value?: String;
+    params?: Array<ParamInterface>;
 }
 
 export interface OutputInterface {
     name: String;
     value?: String;
+    type?: any;
 }
 
 export class BaseNode {
@@ -333,13 +340,18 @@ export class WebSocketNode {
     }
 }
 
+export interface SerialOptionType {
+    baudrate:number,
+    port:string
+}
+
 // 串口连接创建
 export class SerialNode {
     static categoryName = CategoryEnums.SerialType;
     static typeName = "SerialNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const temp = new BaseNode(nodeName
-            ,[{name:"prev"},{name:"data"}]
+            ,[{name:"prev"},{name:"option",type:SerialOptionType}]
             ,[{name:"next"},{name:"data"}]
             ,pos_x
             ,pos_y
