@@ -10,6 +10,7 @@ import '@/assets/custom-drawflow.css'
 
 import * as tn from  '@/TestNode'
 import { ref } from 'vue'
+
 const drawer = ref(false)
 
 let editor: Drawflow;
@@ -122,10 +123,12 @@ onMounted(()=>{
   });
 
   editor.on('connectionCreated',(detail)=>{
-    console.log(detail.output_id,detail.input_id,detail.output_class,detail.input_class);
     removeAllClass('incompatible_param');
     // 更新数据节点
-    
+    graph.addConnection(drawDataIdMap.get(detail.output_id)!
+      ,detail.output_class.slice(7)-1
+      ,drawDataIdMap.get(detail.input_id)!
+      ,detail.input_class.slice(6)-1);
   });
 
   editor.on('connectionCancel',(isCancel)=>{
@@ -133,17 +136,27 @@ onMounted(()=>{
   })
 
   editor.on('connectionRemoved',(detail)=>{
-    console.log(detail.output_id,detail.input_id,detail.output_class,detail.input_class);
+    console.log('connection %o removing',detail);
+    graph.removeConnection(drawDataIdMap.get(detail.output_id)!
+      ,detail.output_class.slice(7)-1
+      ,drawDataIdMap.get(detail.input_id)!
+      ,detail.input_class.slice(6)-1);
+    console.log('connection %o removed',detail);
   });
 
   editor.on('nodeRemoved',(id:string)=>{
+    console.log('node %o removing',id);
     const dataId = drawDataIdMap.get(id);
     drawDataIdMap.delete(id);
     graph.removeNode(dataId);
     dataDrawIdMap.delete(dataId);
+    console.log('node %o removed',id);
   })
   
   initTestGraph();
+
+  addEventListener('importTestGraph',importGraph);
+  addEventListener('exportTestGraph',exportGraph);
 
 })
 
@@ -151,6 +164,37 @@ const initTestGraph = ()=>{
   graph = tn.TestGraphFactory.buildTestGraph("test")
   tn.NodeFactory.addTestNode(graph,tn.BeginNode.typeName,100,100);
   tn.NodeFactory.addTestNode(graph,tn.EndNode.typeName,500,100);
+}
+
+//TODO: 对导入的节点进行绘制
+const initNode = ()=>{
+
+}
+
+//TODO: 对导入的连接进行绘制
+const initConnections = ()=>{
+
+}
+
+
+const outputData = ref(new String);
+
+//TODO: 导出测试图
+const exportGraph = ()=>{
+  var exportJson = tn.TestGraphFactory.exportGraph(graph.graphName);
+  console.log(exportJson)
+  outputData.value=exportJson;
+  drawer.value=true;
+}
+
+//TODO: 导入测试图
+const importGraph = ()=>{
+  // 环境检查
+  // 重建测试图
+  // 绘制节点
+  initNode();
+  // 绘制连接
+  initConnections();
 }
 
 const drawflowKeyDown = (event:KeyboardEvent)=>{
@@ -179,6 +223,7 @@ const drawflowKeyDown = (event:KeyboardEvent)=>{
   <div id="drawflow" @keydown="drawflowKeyDown"></div>
   <el-drawer v-model="drawer" title="I am the title" :with-header="false">
     <span>Hi there!</span>
+    <el-text class="mx-1" size="large">{{ outputData }}</el-text>
   </el-drawer>
 </template>
 
@@ -186,5 +231,14 @@ const drawflowKeyDown = (event:KeyboardEvent)=>{
 #drawflow{
   height: 100%;
   overflow: hidden;
+}
+.el-text{
+  word-break:normal; 
+  width:auto; 
+  display:block; 
+  white-space:pre-wrap;
+  word-wrap : break-word ;
+  overflow: hidden ;
+  size:large;
 }
 </style>

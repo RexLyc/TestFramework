@@ -1,9 +1,15 @@
 <script setup lang="ts">
 
-import { reactive, ref } from 'vue'
+import { ref } from 'vue'
 
-const ConfigClick = (event)=>{
-  console.log('hello: %o',event)
+const sendExportEvent=(event)=>{
+  const e = new CustomEvent('exportTestGraph');
+  dispatchEvent(e);
+}
+
+const sendImportEvent=(event)=>{
+  const e = new CustomEvent('importTestGraph');
+  dispatchEvent(e);
 }
 
 
@@ -20,7 +26,9 @@ const dialogTableVisible = ref(false)
 
     </el-col>
     <el-col :span="6">
-      <el-icon @click="dialogTableVisible = true"><Tools /></el-icon>
+      <el-icon @click="dialogTableVisible = true" ><Tools /></el-icon>
+      <el-icon @click="sendExportEvent" title="导出测试图"><Download /></el-icon>
+      <el-icon @click="sendImportEvent" title="加载测试图"><FolderOpened /></el-icon>
     </el-col>
   </el-row>
 
