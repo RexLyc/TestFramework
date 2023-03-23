@@ -1,12 +1,94 @@
 // 编写全部和测试节点相关的内容
 
-
+// ====================== 事件相关数据结构 ====================== 
 export interface TGAddNewNode {
     testGraph:string,
     nodeName:string,
 }
 
 
+// ====================== 节点参数相关数据结构 ====================== 
+// 类类型
+export interface Type<T = any> extends Function {
+    new (...args: any[]):T;
+}
+
+// 允许自定义新的Param种类
+export interface ParamInterface {
+    readonly paramName: string;
+    readonly paramType: Type;
+    paramValue: Array<any>;
+    // 分组可以默认
+    paramCategory: Array<ParamCategoryEnums>;
+}
+
+export class NextParam implements ParamInterface{
+    paramName: string;
+    paramType: Type;
+    paramValue: Array<any>;
+    paramCategory: Array<ParamCategoryEnums>;
+    constructor(value:Array<InstanceType<Type>>){
+        this.paramName='next';
+        this.paramType=String;
+        this.paramValue=value;
+        this.paramCategory=[ParamCategoryEnums.Flow];
+    }
+}
+
+export enum ParamCategoryEnums {
+    All  = "group",
+    Flow = "groupFlow",
+    Data = "groupData",
+}
+
+export class PrevParam implements ParamInterface{
+    paramName: string;
+    paramType: Type;
+    paramValue: Array<any>;
+    paramCategory: Array<ParamCategoryEnums>;
+    constructor(value:Array<InstanceType<Type>>){
+        this.paramName='prev';
+        this.paramType=String;
+        this.paramValue=value;
+        this.paramCategory=[ParamCategoryEnums.Flow];
+    }
+}
+
+export class Param implements ParamInterface{
+    paramName: string;
+    paramType: Type;
+    paramValue: Array<Type>;
+    paramCategory: Array<ParamCategoryEnums>;
+    constructor(name:string,type:Type,value:Array<InstanceType<Type>>){
+        this.paramName=name;
+        this.paramType=type;
+        this.paramValue=value;
+        this.paramCategory=[ParamCategoryEnums.Data];
+    }
+}
+
+// 必须满足的InOut参数要求
+export interface InOutParamsInterface {
+    params: Array<ParamInterface>;
+}
+
+export class InOutParams {
+    params: Array<ParamInterface>;
+    paramNameSet: Set<String>;
+    constructor(){
+        this.params=new Array();
+        this.paramNameSet=new Set();
+    }
+    addParam(param:ParamInterface):InOutParams{
+        if(this.paramNameSet.has(param.paramName))    
+            throw Error('param name duplicate');
+        this.paramNameSet.add(param.paramName);
+        this.params.push(param);
+        return this;
+    }
+}
+
+// ====================== 图和节点相关数据结构 ====================== 
 // 测试图对象，管理所有测试节点
 export class TestGraph {
     public graphName;
@@ -30,48 +112,26 @@ export class TestGraph {
     }
 
     addNode(node:BaseNode){
-        this.nameNodeMap.set(node.name,node)
+        this.nameNodeMap.set(node.name,node);
     }
-}
 
-
-
-export interface Type<T = any> extends Function {
-    new (...args: any[]):T;
-}
-
-// 允许自定义新的Param种类
-export interface ParamInterface {
-    paramName: string;
-    paramType: Type;
-    paramValue: Array<any>;
-}
-
-export class Param implements ParamInterface{
-    paramName: string;
-    paramType: Type;
-    paramValue: Array<Type>;
-    constructor(name:string,type:Type,value:Array<InstanceType<Type>>){
-        this.paramName=name;
-        this.paramType=type;
-        this.paramValue=value;
+    removeNode(nodeName:string){
+        this.nameNodeMap.delete(nodeName);
     }
-}
 
-// 必须满足的InOut参数要求
-export interface InOutParamsInterface {
-    params: Array<ParamInterface>;
-}
+    addConnection(fromNode:string,fromParam:number,toNode:string,toParam:number){
+        // 名字 + 参数在参数列表中的序号
+        this.nameNodeMap.get(fromNode)?.outputs.params[fromParam].paramValue.push(toNode + ' ' + toParam);
+        this.nameNodeMap.get(toNode)?.inputs.params[toParam].paramValue.push(fromNode + ' ' + fromParam);
+    }
 
-export class InOutParams {
-    params: Array<ParamInterface>;
-    constructor(){
-        this.params=new Array();
+    removeConnection(fromNode:string,fromParam:number,toNode:string,toParam:number){
+        // 查找该记录位置
+
+        // this.nameNodeMap.get(fromNode)?.outputs.params[fromParam].paramValue
+        //     = this.nameNodeMap.get(fromNode)?.outputs.params[fromParam].paramValue.splice()
     }
-    addParam(param:ParamInterface):InOutParams{
-        this.params.push(param);
-        return this;
-    }
+
 }
 
 export class BaseNode {
@@ -109,7 +169,7 @@ export class BaseNode {
 }
 
 
-// Node类型体系
+// ====================== Node类型体系 ====================== 
 // 这种特殊写法是为了检查categoryName/typeName/build作为静态成员
 export interface TypeToken {
     readonly categoryName: string;
@@ -123,48 +183,6 @@ export enum CategoryEnums {
     SerialType = "SerialType",          // 串口测试节点
     FlowType = "FlowType",              // 流程控制节点
     MathType = "MathType",              // 数理运算节点
-}
-
-export const basicTranslate:Map<string,string> = new Map();
-basicTranslate.set("CommonType","通用节点");
-basicTranslate.set("WebType","网络测试节点");
-basicTranslate.set("SerialType","串口测试节点");
-basicTranslate.set("FlowType","流程控制节点");
-
-basicTranslate.set("BeginNode","测试起始节点");
-basicTranslate.set("EndNode","测试终止节点");
-basicTranslate.set("LogNode","日志节点");
-basicTranslate.set("ExtractNode","数据提取节点");
-basicTranslate.set("MergeNode","数据合并节点");
-basicTranslate.set("GlobalNode","全局配置节点");
-basicTranslate.set("SendNode","数据发送节点");
-basicTranslate.set("RecvNode","数据接收节点");
-basicTranslate.set("HttpNode","HTTP连接节点");
-basicTranslate.set("TCPNode","TCP连接节点");
-basicTranslate.set("UDPNode","UDP准备节点");
-basicTranslate.set("WebSocketNode","WebSocket连接节点");
-basicTranslate.set("SerialNode","串口连接节点");
-basicTranslate.set("IfNode","条件跳转节点");
-basicTranslate.set("SwitchNode","Switch跳转节点");
-basicTranslate.set("ConstantNode","常量节点");
-basicTranslate.set("AddMinusNode","加减法节点");
-basicTranslate.set("MultiDivNode","乘除法节点");
-basicTranslate.set("AddNode","加法节点");
-
-
-export class NodeTranslator {
-    static lib:Map<string,string> = basicTranslate;
-
-    static loadTransLib(lib:Map<string,string>){
-        this.lib=lib;
-    }
-    static translate(english:string):string{
-        if(NodeTranslator.lib.get(english)==undefined){
-            return english;
-        } else {
-            return NodeTranslator.lib.get(english)!;
-        }
-    }
 }
 
 
@@ -193,7 +211,7 @@ export class BeginNode {
     static typeName = "BeginNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const outputs = new InOutParams();
-        outputs.addParam(new Param("next",String,[""]));
+        outputs.addParam(new NextParam([""]));
         const temp = new BaseNode(nodeName
             ,new InOutParams()
             ,outputs
@@ -212,7 +230,7 @@ export class EndNode{
     static typeName = "EndNode";
     static build(nodeName:string, pos_x:number,pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new Param("prev",String,[""]));
+        inputs.addParam(new PrevParam([""]));
         const temp = new BaseNode(nodeName
             ,inputs
             ,new InOutParams()
@@ -250,12 +268,12 @@ export class ExtractNode {
     static typeName = "ExtractNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new Param("prev",String,[""]))
+        inputs.addParam(new PrevParam([""]))
             .addParam(new Param("data",String,[""]))
             .addParam(new Param("begin",Number,[0]))
             .addParam(new Param("end",Number,[0]));
         const outputs = new InOutParams();
-        outputs.addParam(new Param("next",String,[""]))
+        outputs.addParam(new NextParam([""]))
             .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
             ,inputs
@@ -275,11 +293,11 @@ export class MergeNode {
     static typeName = "MergeNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new Param("prev",String,[""]))
+        inputs.addParam(new PrevParam([""]))
             .addParam(new Param("data_1",String,[""]))
             .addParam(new Param("data_2",String,[""]));
         const outputs = new InOutParams();
-        outputs.addParam(new Param("next",String,[""]))
+        outputs.addParam(new NextParam([""]))
             .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
             ,inputs
@@ -320,12 +338,12 @@ export class SendNode {
     static typeName = "SendNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new Param("prev",String,[""]))
+        inputs.addParam(new PrevParam([""]))
             .addParam(new Param("file",String,[""])) 
             .addParam(new Param("data",String,[""]))
             .addParam(new Param("timeout",Number,[5000]));
         const outputs = new InOutParams();
-        outputs.addParam(new Param("next",String,[""]))
+        outputs.addParam(new NextParam([""]))
             .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
             ,inputs
@@ -345,12 +363,12 @@ export class RecvNode {
     static typeName = "RecvNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new Param("prev",String,[""]))
+        inputs.addParam(new PrevParam([""]))
             .addParam(new Param("file",String,[""])) 
             .addParam(new Param("data",String,[""]))
             .addParam(new Param("timeout",Number,[5000]));
         const outputs = new InOutParams();
-        outputs.addParam(new Param("next",String,[""]))
+        outputs.addParam(new NextParam([""]))
             .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
             ,inputs
@@ -370,10 +388,10 @@ export class HttpNode {
     static typeName = "HttpNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new Param("prev",String,[""]))
+        inputs.addParam(new PrevParam([""]))
             .addParam(new Param("data",String,[""]));
         const outputs = new InOutParams();
-        outputs.addParam(new Param("next",String,[""]))
+        outputs.addParam(new NextParam([""]))
             .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
             ,inputs
@@ -393,10 +411,10 @@ export class TCPNode {
     static typeName = "TCPNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new Param("prev",String,[""]))
+        inputs.addParam(new PrevParam([""]))
             .addParam(new Param("data",String,[""]));
         const outputs = new InOutParams();
-        outputs.addParam(new Param("next",String,[""]))
+        outputs.addParam(new NextParam([""]))
             .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
             ,inputs
@@ -416,10 +434,10 @@ export class UDPNode {
     static typeName = "UDPNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new Param("prev",String,[""]))
+        inputs.addParam(new PrevParam([""]))
             .addParam(new Param("data",String,[""]));
         const outputs = new InOutParams();
-        outputs.addParam(new Param("next",String,[""]))
+        outputs.addParam(new NextParam([""]))
             .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
             ,inputs
@@ -439,10 +457,10 @@ export class WebSocketNode {
     static typeName = "WebSocketNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new Param("prev",String,[""]))
+        inputs.addParam(new PrevParam([""]))
             .addParam(new Param("data",String,[""]));
         const outputs = new InOutParams();
-        outputs.addParam(new Param("next",String,[""]))
+        outputs.addParam(new NextParam([""]))
             .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
             ,inputs
@@ -467,11 +485,11 @@ export class SerialNode {
     static typeName = "SerialNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new Param("prev",String,[""]))
+        inputs.addParam(new PrevParam([""]))
             .addParam(new Param("baudrate",Number,[9000]))
             .addParam(new Param("port",String,["COM0"]));
         const outputs = new InOutParams();
-        outputs.addParam(new Param("next",String,[""]))
+        outputs.addParam(new NextParam([""]))
             .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
             ,inputs
@@ -491,10 +509,10 @@ export class IfNode {
     static typeName = "IfNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new Param("prev",String,[""]))
+        inputs.addParam(new PrevParam([""]))
             .addParam(new Param("data",String,[""]));
         const outputs = new InOutParams();
-        outputs.addParam(new Param("next",String,[""]))
+        outputs.addParam(new NextParam([""]))
             .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
             ,inputs
@@ -514,10 +532,10 @@ export class SwitchNode {
     static typeName = "SwitchNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new Param("prev",String,[""]))
+        inputs.addParam(new PrevParam([""]))
             .addParam(new Param("data",String,[""]));
         const outputs = new InOutParams();
-        outputs.addParam(new Param("next",String,[""]))
+        outputs.addParam(new NextParam([""]))
             .addParam(new Param("data",String,[""]));
         const temp = new BaseNode(nodeName
             ,inputs
@@ -528,6 +546,43 @@ export class SwitchNode {
             ,{}
             ,nodeName);
         return temp;
+    }
+}
+
+
+
+// ====================== 实用工具 ====================== 
+// 默认翻译
+export const basicTranslate:Map<string,string> = new Map();
+// 翻译器
+export class NodeTranslator {
+    static lib:Map<string,string> = basicTranslate;
+
+    static loadTransLib(lib:Map<string,string>){
+        this.lib=lib;
+    }
+    static translate(english:string):string{
+        if(NodeTranslator.lib.get(english)==undefined){
+            return english;
+        } else {
+            return NodeTranslator.lib.get(english)!;
+        }
+    }
+}
+
+// 实用类型工具
+export class TypeTool {
+    private constructor(){}
+
+    static isParent(child:any,parent:any):boolean{
+        let current=child;
+        while(current){
+            if(current===parent){
+                return true;
+            }
+            current=current.__proto__;
+        }
+        return false;
     }
 }
 
@@ -569,22 +624,6 @@ export class NodeFactory {
     }
 }
 
-// 实用类型工具
-export class TypeTool {
-    private constructor(){}
-
-    static isParent(child:any,parent:any):boolean{
-        let current=child;
-        while(current){
-            if(current===parent){
-                return true;
-            }
-            current=current.__proto__;
-        }
-        return false;
-    }
-}
-
 // 测试图工厂，负责创建测试图
 export class TestGraphFactory {
     private constructor(){}
@@ -598,7 +637,38 @@ export class TestGraphFactory {
         this.testGraphMap.set(graphName,new TestGraph(graphName))
         return this.testGraphMap.get(graphName)!;
     }
+
+    static removeTestGraph(graphName:string){
+        this.testGraphMap.delete(graphName);
+    }
 }
+
+
+// ====================== 加载时执行 ====================== 
+basicTranslate.set("CommonType","通用节点");
+basicTranslate.set("WebType","网络测试节点");
+basicTranslate.set("SerialType","串口测试节点");
+basicTranslate.set("FlowType","流程控制节点");
+
+basicTranslate.set("BeginNode","测试起始节点");
+basicTranslate.set("EndNode","测试终止节点");
+basicTranslate.set("LogNode","日志节点");
+basicTranslate.set("ExtractNode","数据提取节点");
+basicTranslate.set("MergeNode","数据合并节点");
+basicTranslate.set("GlobalNode","全局配置节点");
+basicTranslate.set("SendNode","数据发送节点");
+basicTranslate.set("RecvNode","数据接收节点");
+basicTranslate.set("HttpNode","HTTP连接节点");
+basicTranslate.set("TCPNode","TCP连接节点");
+basicTranslate.set("UDPNode","UDP准备节点");
+basicTranslate.set("WebSocketNode","WebSocket连接节点");
+basicTranslate.set("SerialNode","串口连接节点");
+basicTranslate.set("IfNode","条件跳转节点");
+basicTranslate.set("SwitchNode","Switch跳转节点");
+basicTranslate.set("ConstantNode","常量节点");
+basicTranslate.set("AddMinusNode","加减法节点");
+basicTranslate.set("MultiDivNode","乘除法节点");
+basicTranslate.set("AddNode","加法节点");
 
 NodeFactory.loadNodeLibrary(BeginNode)
 NodeFactory.loadNodeLibrary(EndNode)

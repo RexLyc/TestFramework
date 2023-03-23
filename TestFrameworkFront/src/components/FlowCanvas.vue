@@ -9,7 +9,6 @@ import Drawflow from '@/../Drawflow/src/drawflow.js'
 import '@/assets/custom-drawflow.css'
 
 import * as tn from  '@/TestNode'
-import { transform } from 'lodash'
 import { ref } from 'vue'
 const drawer = ref(false)
 
@@ -22,6 +21,10 @@ const props = defineProps({
   pos_x:Number,
   pos_y:Number
 })
+
+// 绘制节点id和数据节点id映射(双向)
+const drawDataIdMap = new Map<string,string>();
+const dataDrawIdMap = new Map<string,string>();
 
 watch(props,()=>{
   // 需要计算canvas 左上角、transform、scale
@@ -44,6 +47,24 @@ watch(props,()=>{
   tn.NodeFactory.addTestNode(graph,props.newNode!,left,top);
 })
 
+function addClassFor(className:string,classAdd:string){
+  for(const element of document.querySelectorAll("[class*="+className+"]")){
+    (element as Element).classList.add(classAdd);
+  }
+}
+
+function removeClassFor(className:string,classRemove:string){
+  for(const element of document.querySelectorAll("[class*="+className+"]")){
+    (element as Element).classList.remove(classRemove);
+  }
+}
+
+function removeAllClass(className:string){
+  removeClassFor(className,className);
+}
+
+const HiddenCSS = "incompatible_param";
+
 onMounted(()=>{
   const Vue = { version: 3, h, render };
   var id = document.getElementById("drawflow");
@@ -56,14 +77,16 @@ onMounted(()=>{
       .getTestGraph(newNode.testGraph)
       .nameNodeMap
       .get(newNode.nodeName)!;
-    editor.addNode(node.name
+    const drawId = editor.addNode(node.name
       ,node.inputs
       ,node.outputs
       ,node.pos_x
       ,node.pos_y
       ,node.className
       ,node.data
-      ,node.html)
+      ,node.html);
+    drawDataIdMap.set(String(drawId),node.name);
+    dataDrawIdMap.set(node.name,String(drawId));
   });
 
   editor.on('translate',(pos:{x:number,y:number})=>{
@@ -84,6 +107,40 @@ onMounted(()=>{
       drawer.value=true;
       // build menu
     }
+  })
+
+  editor.on('connectionStart',(detail)=>{
+    const outputIndex:number =detail.output_class.slice(7) - 1;
+    addClassFor(tn.ParamCategoryEnums.All,HiddenCSS);
+    // for(const element of document.querySelectorAll("[class*="+tn.ParamCategoryEnums.All+"]")){
+    //   (element as Element).classList.add('incompatible_param');
+    // }
+    const paramCategoryName = graph.nameNodeMap.get(drawDataIdMap.get(detail.output_id))?.outputs.params[outputIndex].paramCategory;
+    for(const categoryName of paramCategoryName){
+      removeClassFor(categoryName,HiddenCSS);
+    }
+  });
+
+  editor.on('connectionCreated',(detail)=>{
+    console.log(detail.output_id,detail.input_id,detail.output_class,detail.input_class);
+    removeAllClass('incompatible_param');
+    // 更新数据节点
+    
+  });
+
+  editor.on('connectionCancel',(isCancel)=>{
+    removeAllClass('incompatible_param');
+  })
+
+  editor.on('connectionRemoved',(detail)=>{
+    console.log(detail.output_id,detail.input_id,detail.output_class,detail.input_class);
+  });
+
+  editor.on('nodeRemoved',(id:string)=>{
+    const dataId = drawDataIdMap.get(id);
+    drawDataIdMap.delete(id);
+    graph.removeNode(dataId);
+    dataDrawIdMap.delete(dataId);
   })
   
   initTestGraph();
