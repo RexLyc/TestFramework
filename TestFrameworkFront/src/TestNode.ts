@@ -18,27 +18,36 @@ export interface ParamInterface {
     readonly paramName: string;
     readonly paramType: Type;
     paramValue: Array<any>;
-    // 分组可以默认
-    paramCategory: Array<ParamCategoryEnums>;
 }
 
-export class NextParam implements ParamInterface{
-    paramName: string;
-    paramType: Type;
-    paramValue: Array<any>;
-    paramCategory: Array<ParamCategoryEnums>;
-    constructor(){
-        this.paramName='next';
-        this.paramType=String;
-        this.paramValue=new Array();
-        this.paramCategory=[ParamCategoryEnums.Flow];
-    }
+
+// 参数类型的静态变量约束
+export interface ParamStaticInterface {
+    // 代表参数类类型
+    readonly paramClass:string;
+    // 参数类类型分组
+    readonly paramCategory: Array<ParamCategoryEnums>;
+    new (paramName:string,paramType:Type,paramValue:Array<any>): ParamInterface;
 }
+
 
 export enum ParamCategoryEnums {
     All  = "group",
     Flow = "groupFlow",
     Data = "groupData",
+}
+
+export class NextParam implements ParamInterface{
+    static paramClass: string="NextParam";
+    static paramCategory: Array<ParamCategoryEnums>=[ParamCategoryEnums.Flow];
+    paramName: string;
+    paramType: Type;
+    paramValue: Array<any>;
+    constructor(){
+        this.paramName='next';
+        this.paramType=String;
+        this.paramValue=new Array();
+    }
 }
 
 export class PrevParam implements ParamInterface{
@@ -55,6 +64,8 @@ export class PrevParam implements ParamInterface{
 }
 
 export class Param implements ParamInterface{
+    static paramClass: string="Param";
+    static paramCategory: Array<ParamCategoryEnums>=[ParamCategoryEnums.Data];
     paramName: string;
     paramType: Type;
     paramValue: Array<Type>;
@@ -79,11 +90,11 @@ export class InOutParams {
         this.params=new Array();
         this.paramNameSet=new Set();
     }
-    addParam(param:ParamInterface):InOutParams{
-        if(this.paramNameSet.has(param.paramName))    
+    addParam(paramName:string,paramType:Type=String,paramValue:Array<any>=[],paramClassType:ParamStaticInterface=Param):InOutParams{
+        if(this.paramNameSet.has(paramName))    
             throw Error('param name duplicate');
-        this.paramNameSet.add(param.paramName);
-        this.params.push(param);
+        this.paramNameSet.add(paramName);
+        this.params.push(new paramClassType(paramName,paramType,paramValue));
         return this;
     }
 
@@ -152,13 +163,20 @@ export class TestGraph {
 
 export class BaseNode {
     // for render
+    // 内部唯一名(id)
     public name;
+    // 输入参数
     public inputs;
+    // 输出参数
     public outputs;
+    // 坐标位置
     public pos_x;
     public pos_y;
+    // 节点类类型名称
     public className;
+    // 保留数据（暂未使用）
     public data;
+    // 展示名称
     public html;
     // for test graph
 
@@ -180,7 +198,6 @@ export class BaseNode {
         this.data=data;
         this.html=html;
     }
-
 
 }
 
@@ -490,11 +507,6 @@ export class WebSocketNode {
     }
 }
 
-export interface SerialOptionType {
-    baudrate:number,
-    port:string
-}
-
 // 串口连接创建
 export class SerialNode {
     static categoryName = CategoryEnums.SerialType;
@@ -667,6 +679,10 @@ export class TestGraphFactory {
     static importGraph(graphJson:string):string{
         // 输入json，输出图名
     }
+
+    static exportNode(graphName:string,nodeName:string):string{
+        return ImportExportProtocol.exportNode(this.testGraphMap.get(graphName),nodeName);
+    }
 }
 
 export class ImportExportProtocol {
@@ -690,7 +706,11 @@ export class ImportExportProtocol {
     }
 
     static exportGraph(graph:TestGraph):string{
-        return JSON.stringify(graph,null,2);
+        return JSON.stringify(graph,null,4);
+    }
+
+    static exportNode(graph:TestGraph,nodeName:string):string{
+        return JSON.stringify(graph.nameNodeMap.get(nodeName),null,4);
     }
 }
 

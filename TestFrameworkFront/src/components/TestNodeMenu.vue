@@ -41,6 +41,7 @@ function mousedown(event) {
 </script>
 
 <template>
+    <el-scrollbar >
     <el-menu
         default-active="2"
         class="el-menu-vertical-demo"
@@ -86,6 +87,7 @@ function mousedown(event) {
         </template>
         
     </el-menu>
+</el-scrollbar>
 </template>
 
 <style scoped>

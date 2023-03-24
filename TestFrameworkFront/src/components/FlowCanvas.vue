@@ -105,8 +105,9 @@ onMounted(()=>{
       nodeName = (e.target as HTMLElement).innerHTML;
     }
     if(nodeName){
-      drawer.value=true;
       // build menu
+      outputData.value=tn.TestGraphFactory.exportNode(graph.graphName,nodeName);
+      drawer.value=true;
     }
   })
 
@@ -152,6 +153,13 @@ onMounted(()=>{
     dataDrawIdMap.delete(dataId);
     console.log('node %o removed',id);
   })
+
+  editor.on('nodeMoved',(id:string)=>{
+    const element = document.getElementById('node-'+id);
+    graph.nameNodeMap.get(drawDataIdMap.get(id)!)!.pos_x=Number(element?.style.left.slice(0,-2));
+    graph.nameNodeMap.get(drawDataIdMap.get(id)!)!.pos_y=Number(element?.style.top.slice(0,-2));
+    console.log(element?.style.left.slice(0,-2),element?.style.top.slice(0,-2));
+  });
   
   initTestGraph();
 
@@ -185,6 +193,7 @@ const exportGraph = ()=>{
   console.log(exportJson)
   outputData.value=exportJson;
   drawer.value=true;
+  download('test.json',exportJson);
 }
 
 //TODO: 导入测试图
@@ -217,12 +226,27 @@ const drawflowKeyDown = (event:KeyboardEvent)=>{
   }
 }
 
+function download(filename, content) {
+  const arraybuffer = new TextEncoder().encode(content).buffer;
+  const blob = new Blob([arraybuffer], { type: 'text/plain;base64' });
+  const reader = new FileReader();
+  reader.readAsDataURL(blob);
+  reader.onload = (event) => {
+    const element = document.createElement('a');
+    element.href = event.target.result;
+    element.download = filename;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
+}
+
 </script>
 
 <template>
   <div id="drawflow" @keydown="drawflowKeyDown"></div>
   <el-drawer v-model="drawer" title="I am the title" :with-header="false">
-    <span>Hi there!</span>
+    <span>JsonData</span>
     <el-text class="mx-1" size="large">{{ outputData }}</el-text>
   </el-drawer>
 </template>
@@ -232,7 +256,7 @@ const drawflowKeyDown = (event:KeyboardEvent)=>{
   height: 100%;
   overflow: hidden;
 }
-.el-text{
+.el-text {
   word-break:normal; 
   width:auto; 
   display:block; 
@@ -240,5 +264,7 @@ const drawflowKeyDown = (event:KeyboardEvent)=>{
   word-wrap : break-word ;
   overflow: hidden ;
   size:large;
+  background-color: #EBEEF5;
+  color: #000000;
 }
 </style>
