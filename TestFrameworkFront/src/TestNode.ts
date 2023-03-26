@@ -13,94 +13,174 @@ export interface Type<T = any> extends Function {
     new (...args: any[]):T;
 }
 
-// 允许自定义新的Param种类
-export interface ParamInterface {
-    readonly paramName: string;
-    readonly paramType: Type;
-    paramValue: Array<any>;
+export class BaseParam {
+    paramName: string;
+    readonly paramType: ParamRuntimeTypeEnums;
+    paramValue: Array<string>;
+    paramRef: Array<string>
+    readonly typeName:string;
+    readonly categoryNames: Array<ParamCategoryEnums>;
+
+    constructor(typeName: string
+        ,categoryNames:Array<ParamCategoryEnums>
+        ,paramName:string
+        ,paramType:ParamRuntimeTypeEnums
+        ,paramRef:Array<string>
+        ,paramValue:Array<string>) {
+        this.paramName=paramName;
+        this.paramType=paramType;
+        this.paramValue=paramValue;
+        this.paramRef=paramRef;
+        this.typeName=typeName;
+        this.categoryNames=categoryNames;
+    }
+
+    toJSON():object{
+        return {
+            "typeName":this.typeName
+            ,"paramName":this.paramName
+            ,"paramType":this.paramType
+            ,"paramRef":this.paramRef
+            ,"paramValue":this.paramValue
+        };
+    }
 }
 
-
-// 参数类型的静态变量约束
-export interface ParamStaticInterface {
-    // 代表参数类类型
-    readonly paramClass:string;
-    // 参数类类型分组
-    readonly paramCategory: Array<ParamCategoryEnums>;
-    new (paramName:string,paramType:Type,paramValue:Array<any>): ParamInterface;
+export interface ParamBuilder {
+    readonly typeName: string;
+    readonly categoryNames: Array<ParamCategoryEnums>;
+    build(paramName:string,paramType:ParamRuntimeTypeEnums,paramRef:Array<string>,paramvalue:Array<string>):BaseParam;
 }
 
+// 参数值内容永远是string存储
+// 其参数值类型（如何使用参数值），是其运行时类型
+// 将用于提示连接两侧是否完全匹配，不匹配的情况下会进行类型转换，但不保证成功
+export enum ParamRuntimeTypeEnums {
+    // 参数值是变量名
+    VarNameValue    = "VarNameValue",
+    // 参数值是字面字符串
+    StringValue     = "StringValue",
+    // 参数值是整型字面值
+    IntegerValue    = "IntegerValue",
+    // 参数值是浮点字面值
+    FloatValue      = "FloatValue",
+    // 参数值是python脚本
+    PythonValue     = "PythonValue",
+}
 
+// 分组用于表明是否可以连接
 export enum ParamCategoryEnums {
     All  = "group",
     Flow = "groupFlow",
     Data = "groupData",
 }
 
-export class NextParam implements ParamInterface{
-    static paramClass: string="NextParam";
-    static paramCategory: Array<ParamCategoryEnums>=[ParamCategoryEnums.Flow];
-    paramName: string;
-    paramType: Type;
-    paramValue: Array<any>;
-    constructor(){
-        this.paramName='next';
-        this.paramType=String;
-        this.paramValue=new Array();
+export class FlowParam {
+    static readonly typeName: string="FlowParam";
+    static readonly categoryNames: Array<ParamCategoryEnums>=[ParamCategoryEnums.Flow];
+    static build(paramName:string
+        ,paramType:ParamRuntimeTypeEnums
+        ,paramRef:Array<string>
+        ,paramValue:Array<string>):BaseParam {
+        return new BaseParam(FlowParam.typeName
+            ,FlowParam.categoryNames
+            ,paramName
+            ,paramType
+            ,paramRef
+            ,paramValue);
     }
 }
 
-export class PrevParam implements ParamInterface{
-    paramName: string;
-    paramType: Type;
-    paramValue: Array<any>;
-    paramCategory: Array<ParamCategoryEnums>;
-    constructor(){
-        this.paramName='prev';
-        this.paramType=String;
-        this.paramValue=new Array();
-        this.paramCategory=[ParamCategoryEnums.Flow];
+export class VariableParam {
+    static readonly typeName: string="VariableParam";
+    static readonly categoryNames: Array<ParamCategoryEnums>=[ParamCategoryEnums.Data];
+    static build(paramName:string
+        ,paramType:ParamRuntimeTypeEnums
+        ,paramRef:Array<string>
+        ,paramValue:Array<string>):BaseParam {
+        return new BaseParam(VariableParam.typeName
+            ,VariableParam.categoryNames
+            ,paramName
+            ,paramType
+            ,paramRef
+            ,paramValue);
     }
 }
 
-export class Param implements ParamInterface{
-    static paramClass: string="Param";
-    static paramCategory: Array<ParamCategoryEnums>=[ParamCategoryEnums.Data];
-    paramName: string;
-    paramType: Type;
-    paramValue: Array<Type>;
-    paramCategory: Array<ParamCategoryEnums>;
-    constructor(name:string,type:Type=String){
-        this.paramName=name;
-        this.paramType=type;
-        this.paramValue=new Array();
-        this.paramCategory=[ParamCategoryEnums.Data];
+export class ConstantParam {
+    static readonly typeName: string="ConstantParam";
+    static readonly categoryNames: Array<ParamCategoryEnums>=[ParamCategoryEnums.Data];
+    static build(paramName:string
+        ,paramType:ParamRuntimeTypeEnums
+        ,paramRef:Array<string>
+        ,paramValue:Array<string>):BaseParam {
+        return new BaseParam(ConstantParam.typeName
+            ,ConstantParam.categoryNames
+            ,paramName
+            ,paramType
+            ,paramRef
+            ,paramValue);
     }
 }
+
+export class ParamLibrary {
+    private constructor(){}
+
+    static paramBuilderMap:Map<string,ParamBuilder> = new Map();
+
+    static addParamBuilder(paramBuilder:ParamBuilder):boolean{
+        if(this.paramBuilderMap.has(paramBuilder.typeName))
+            return false;
+        this.paramBuilderMap.set(paramBuilder.typeName,paramBuilder);
+        return true;
+    }
+    
+    static getBuilder(builderName:string):ParamBuilder|undefined{
+        return this.paramBuilderMap.get(builderName);
+    }
+}
+
+ParamLibrary.addParamBuilder(FlowParam);
+ParamLibrary.addParamBuilder(VariableParam);
+ParamLibrary.addParamBuilder(ConstantParam);
 
 // 必须满足的InOut参数要求
-export interface InOutParamsInterface {
-    params: Array<ParamInterface>;
-}
-
 export class InOutParams {
-    params: Array<ParamInterface>;
+    params: Array<BaseParam>;
     paramNameSet: Set<String>;
     constructor(){
         this.params=new Array();
         this.paramNameSet=new Set();
     }
-    addParam(paramName:string,paramType:Type=String,paramValue:Array<any>=[],paramClassType:ParamStaticInterface=Param):InOutParams{
-        if(this.paramNameSet.has(paramName))    
+
+    addParam(paramBuilder:ParamBuilder | string
+            ,paramName:string
+            ,paramType:ParamRuntimeTypeEnums=ParamRuntimeTypeEnums.VarNameValue
+            ,paramRef:Array<string>=[]
+            ,paramValue:Array<string>=[]): InOutParams {
+        if(this.paramNameSet.has(paramName))
             throw Error('param name duplicate');
         this.paramNameSet.add(paramName);
-        this.params.push(new paramClassType(paramName,paramType,paramValue));
+        if(typeof paramBuilder ==='string') {
+            this.params.push(ParamLibrary.getBuilder(paramBuilder)?.build(paramName,paramType,paramRef,paramValue)!);
+        }
+        else{
+            this.params.push(paramBuilder.build(paramName,paramType,paramRef,paramValue));
+        }
         return this;
     }
 
     toJSON():object{
         // 去掉不必要的内容
         return {"params":this.params};
+    }
+
+    static fromJSON(jsonObject:any): InOutParams{
+        const inOutParams = new InOutParams();
+        for(let p of jsonObject.params) {
+            inOutParams.addParam(p.typeName,p.paramName,p.paramType,p.paramRef,p.paramValue);
+        }
+        return inOutParams;
     }
 }
 
@@ -137,27 +217,35 @@ export class TestGraph {
 
     addConnection(fromNode:string,fromParam:number,toNode:string,toParam:number){
         // 名字 + 参数在参数列表中的序号
-        this.nameNodeMap.get(fromNode)?.outputs.params[fromParam].paramValue.push(toNode + '$' + toParam);
-        this.nameNodeMap.get(toNode)?.inputs.params[toParam].paramValue.push(fromNode + '$' + fromParam);
+        this.nameNodeMap.get(fromNode)?.outputs.params[fromParam].paramRef!.push(toNode + '$' + toParam);
+        this.nameNodeMap.get(toNode)?.inputs.params[toParam].paramRef!.push(fromNode + '$' + fromParam);
     }
 
     removeConnection(fromNode:string,fromParam:number,toNode:string,toParam:number){
         // 查找在output中该记录位置
-        const fromIndex = this.nameNodeMap.get(fromNode)?.outputs.params[fromParam].paramValue.indexOf(toNode +'$'+toParam);
-        this.nameNodeMap.get(fromNode)!.outputs.params[fromParam].paramValue.splice(fromIndex!,1);
+        const fromIndex = this.nameNodeMap.get(fromNode)?.outputs.params[fromParam].paramRef!.indexOf(toNode +'$'+toParam);
+        this.nameNodeMap.get(fromNode)!.outputs.params[fromParam].paramRef!.splice(fromIndex!,1);
         // 查找在input中该记录位置
-        const toIndex = this.nameNodeMap.get(toNode)?.inputs.params[toParam].paramValue.indexOf(fromNode + '$' + fromParam);
-        this.nameNodeMap.get(toNode)!.inputs.params[toParam].paramValue.splice(toIndex!,1);
+        const toIndex = this.nameNodeMap.get(toNode)?.inputs.params[toParam].paramRef!.indexOf(fromNode + '$' + fromParam);
+        this.nameNodeMap.get(toNode)!.inputs.params[toParam].paramRef!.splice(toIndex!,1);
     }
 
     toJSON():object{
         return {
-            "graph":{
-                "graphName":this.graphName,
-                "nameCountMap":Array.from(this.nameCountMap),
-                "nameNodeMap":Array.from(this.nameNodeMap)
-            }
+            "graphName":this.graphName,
+            "nameCountMap":Array.from(this.nameCountMap),
+            "nameNodeMap":Array.from(this.nameNodeMap)
         };
+    }
+
+    static fromJSON(jsonObject:any):TestGraph{
+        const graph = new TestGraph(jsonObject.graphName);
+        graph.nameCountMap=new Map(jsonObject.nameCountMap);
+        const tempNameNodeMap = new Map(jsonObject.nameNodeMap);
+        for(let node of tempNameNodeMap.entries()){
+            graph.nameNodeMap.set(node[0] as string,BaseNode.fromJSON(node[1]));
+        }
+        return graph;
     }
 }
 
@@ -173,7 +261,7 @@ export class BaseNode {
     public pos_x;
     public pos_y;
     // 节点类类型名称
-    public className;
+    public typeName;
     // 保留数据（暂未使用）
     public data;
     // 展示名称
@@ -182,11 +270,11 @@ export class BaseNode {
 
 
     constructor(name: string
-        ,inputs:InOutParamsInterface
-        ,outputs:InOutParamsInterface
+        ,inputs:InOutParams
+        ,outputs:InOutParams
         ,pos_x:number
         ,pos_y:number
-        ,className:string
+        ,typeName:string
         ,data:object
         ,html:string){
         this.name = name
@@ -194,20 +282,30 @@ export class BaseNode {
         this.outputs=outputs
         this.pos_x=pos_x;
         this.pos_y=pos_y;
-        this.className=className;
+        this.typeName=typeName;
         this.data=data;
         this.html=html;
     }
 
+    static fromJSON(jsonObject:any):BaseNode{
+        return new BaseNode(jsonObject.name
+            ,InOutParams.fromJSON(jsonObject.inputs)
+            ,InOutParams.fromJSON(jsonObject.outputs)
+            ,jsonObject.pos_x
+            ,jsonObject.pos_y
+            ,jsonObject.typeName
+            ,jsonObject.data
+            ,jsonObject.html);
+    }
 }
 
 
 // ====================== Node类型体系 ====================== 
 // 这种特殊写法是为了检查categoryName/typeName/build作为静态成员
-export interface TypeToken {
+export interface NodeBuilder {
     readonly categoryName: string;
     readonly typeName: string;
-    build(nodeName:string, pos_x:number, pos_y:number): BaseNode
+    build(nodeName:string, pos_x:number, pos_y:number): BaseNode;
 }
 
 export enum CategoryEnums {
@@ -225,7 +323,7 @@ export class ConstantNode {
     static typeName = "ConstantNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const outputs = new InOutParams();
-        outputs.addParam(new Param("data"))
+        outputs.addParam(ConstantParam,"data",ParamRuntimeTypeEnums.StringValue);
         const temp = new BaseNode(nodeName
             ,new InOutParams()
             ,outputs
@@ -244,7 +342,7 @@ export class BeginNode {
     static typeName = "BeginNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const outputs = new InOutParams();
-        outputs.addParam(new NextParam());
+        outputs.addParam(FlowParam,"next");
         const temp = new BaseNode(nodeName
             ,new InOutParams()
             ,outputs
@@ -263,7 +361,7 @@ export class EndNode{
     static typeName = "EndNode";
     static build(nodeName:string, pos_x:number,pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new PrevParam());
+        inputs.addParam(FlowParam,"prev");
         const temp = new BaseNode(nodeName
             ,inputs
             ,new InOutParams()
@@ -282,7 +380,7 @@ export class LogNode {
     static typeName = "LogNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new Param("data"))
+        inputs.addParam(VariableParam,"data")
         const temp = new BaseNode(nodeName
             ,inputs
             ,new InOutParams()
@@ -301,13 +399,13 @@ export class ExtractNode {
     static typeName = "ExtractNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new PrevParam())
-            .addParam(new Param("data"))
-            .addParam(new Param("begin"))
-            .addParam(new Param("end"));
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"data")
+            .addParam(VariableParam,"begin")
+            .addParam(VariableParam,"end");
         const outputs = new InOutParams();
-        outputs.addParam(new NextParam())
-            .addParam(new Param("data"));
+        outputs.addParam(FlowParam,"next")
+            .addParam(VariableParam,"data");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -326,12 +424,12 @@ export class MergeNode {
     static typeName = "MergeNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new PrevParam())
-            .addParam(new Param("data_1"))
-            .addParam(new Param("data_2"));
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"data_1")
+            .addParam(VariableParam,"data_2");
         const outputs = new InOutParams();
-        outputs.addParam(new NextParam())
-            .addParam(new Param("data"));
+        outputs.addParam(FlowParam,"next")
+            .addParam(VariableParam,"data");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -350,9 +448,9 @@ export class GlobalNode {
     static typeName = "GlobalNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new Param("data"));
+        inputs.addParam(VariableParam,"data");
         const outputs = new InOutParams();
-        outputs.addParam(new Param("data"));
+        outputs.addParam(VariableParam,"data");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -371,13 +469,13 @@ export class SendNode {
     static typeName = "SendNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new PrevParam())
-            .addParam(new Param("file"))
-            .addParam(new Param("data"))
-            .addParam(new Param("timeout"));
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"file")
+            .addParam(VariableParam,"data")
+            .addParam(VariableParam,"timeout");
         const outputs = new InOutParams();
-        outputs.addParam(new NextParam())
-            .addParam(new Param("data"));
+        outputs.addParam(FlowParam,"next")
+            .addParam(VariableParam,"data");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -396,13 +494,13 @@ export class RecvNode {
     static typeName = "RecvNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new NextParam())
-            .addParam(new Param("file"))
-            .addParam(new Param("data"))
-            .addParam(new Param("timeout"));
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"file")
+            .addParam(VariableParam,"data")
+            .addParam(VariableParam,"timeout");
         const outputs = new InOutParams();
-        outputs.addParam(new NextParam())
-            .addParam(new Param("data"));
+        outputs.addParam(FlowParam,"next")
+            .addParam(VariableParam,"data");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -421,11 +519,11 @@ export class HttpNode {
     static typeName = "HttpNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new NextParam())
-            .addParam(new Param("data"));
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"data");
         const outputs = new InOutParams();
-        outputs.addParam(new NextParam())
-            .addParam(new Param("data"));
+        outputs.addParam(FlowParam,"next")
+            .addParam(VariableParam,"data");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -444,11 +542,11 @@ export class TCPNode {
     static typeName = "TCPNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new NextParam())
-            .addParam(new Param("data"));
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"data");
         const outputs = new InOutParams();
-        outputs.addParam(new NextParam())
-            .addParam(new Param("data"));
+        outputs.addParam(FlowParam,"next")
+            .addParam(VariableParam,"data");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -467,11 +565,11 @@ export class UDPNode {
     static typeName = "UDPNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new NextParam())
-            .addParam(new Param("data"));
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"data");
         const outputs = new InOutParams();
-        outputs.addParam(new NextParam())
-            .addParam(new Param("data"));
+        outputs.addParam(FlowParam,"next")
+            .addParam(VariableParam,"data");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -490,11 +588,11 @@ export class WebSocketNode {
     static typeName = "WebSocketNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new NextParam())
-            .addParam(new Param("data"));
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"data");
         const outputs = new InOutParams();
-        outputs.addParam(new NextParam())
-            .addParam(new Param("data"));
+        outputs.addParam(FlowParam,"next")
+            .addParam(VariableParam,"data");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -513,12 +611,12 @@ export class SerialNode {
     static typeName = "SerialNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new NextParam())
-            .addParam(new Param("baudrate"))
-            .addParam(new Param("port"));
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"baudrate")
+            .addParam(VariableParam,"port");
         const outputs = new InOutParams();
-        outputs.addParam(new NextParam())
-            .addParam(new Param("data"));
+        outputs.addParam(FlowParam,"next")
+            .addParam(VariableParam,"data");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -537,11 +635,11 @@ export class IfNode {
     static typeName = "IfNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new NextParam())
-            .addParam(new Param("data"));
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"data");
         const outputs = new InOutParams();
-        outputs.addParam(new NextParam())
-            .addParam(new Param("data"));
+        outputs.addParam(FlowParam,"next")
+            .addParam(VariableParam,"data");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -560,11 +658,11 @@ export class SwitchNode {
     static typeName = "SwitchNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(new NextParam())
-            .addParam(new Param("data"));
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"data");
         const outputs = new InOutParams();
-        outputs.addParam(new NextParam())
-            .addParam(new Param("data"));
+        outputs.addParam(FlowParam,"next")
+            .addParam(VariableParam,"data");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -618,16 +716,16 @@ export class TypeTool {
 export class NodeFactory {
     private constructor(){}
 
-    static nodeTypeMap = new Map<string,TypeToken>;
+    static nodeTypeMap = new Map<string,NodeBuilder>;
 
     // 加载自定义节点
-    static loadNodeLibrary(type: TypeToken): boolean{
+    static loadNodeLibrary(type: NodeBuilder): boolean{
         this.nodeTypeMap.set(type.typeName,type)
         return true
     }
 
-    static buildTestNode(testGraph:TestGraph
-        ,nodeType: TypeToken
+    private static buildTestNode(testGraph:TestGraph
+        ,nodeType: NodeBuilder
         ,pos_x:number
         ,pos_y:number){
         const nodeName = testGraph.newNodeName(nodeType.typeName)
@@ -676,12 +774,25 @@ export class TestGraphFactory {
         return ImportExportProtocol.exportGraph(this.testGraphMap.get(graphName)!);
     }
 
-    static importGraph(graphJson:string):string{
+    static addTestGraph(graph:TestGraph):boolean{
+        if(this.testGraphMap.has(graph.graphName))
+            return false;
+        this.testGraphMap.set(graph.graphName,graph);
+        return true;
+    }
+
+    static importGraph(graphJson:string):TestGraph | null{
         // 输入json，输出图名
+        try {
+            return ImportExportProtocol.importGraph(graphJson);
+        } catch (error) {
+            console.log(error);
+            return null;
+        }
     }
 
     static exportNode(graphName:string,nodeName:string):string{
-        return ImportExportProtocol.exportNode(this.testGraphMap.get(graphName),nodeName);
+        return ImportExportProtocol.exportNode(this.testGraphMap.get(graphName)!,nodeName);
     }
 }
 
@@ -690,8 +801,6 @@ export class ImportExportProtocol {
         {
             "meta":
             {
-                "dependType":["CommonType","SerialType"...],
-                "name":"testGraph",
                 "version:"0.1"
             },
             "graph":
@@ -700,13 +809,17 @@ export class ImportExportProtocol {
             }
         }
     */
-    static version:number;
-    static importGraph(graphJson:string):TestGraph {
-        return null;
+    static version:number=1;
+    static importGraph(graphJson:string):TestGraph{
+        const jsonObject = JSON.parse(graphJson);
+        if(jsonObject.meta.version > this.version){
+            throw Error("incompable data version");
+        }
+        return TestGraph.fromJSON(jsonObject.graph);
     }
 
     static exportGraph(graph:TestGraph):string{
-        return JSON.stringify(graph,null,4);
+        return JSON.stringify({"meta":{"version":this.version},"graph":graph},null,4);
     }
 
     static exportNode(graph:TestGraph,nodeName:string):string{

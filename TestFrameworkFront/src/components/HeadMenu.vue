@@ -1,15 +1,35 @@
 <script setup lang="ts">
 
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
+
+const inputElement = ref();
+
+onMounted(()=>{
+  inputElement.value = document.createElement('input');
+  inputElement.value.type='file';
+  inputElement.value.onchange=sendImportEvent;
+  inputElement.value.accept=".json";
+})
 
 const sendExportEvent=(event)=>{
   const e = new CustomEvent('exportTestGraph');
   dispatchEvent(e);
 }
 
+const showUpload=(event)=>{
+  inputElement.value.click();
+}
+
 const sendImportEvent=(event)=>{
-  const e = new CustomEvent('importTestGraph');
-  dispatchEvent(e);
+  console.log(inputElement.value.files[0]);
+  const jsonFile = inputElement.value.files[0];
+  var reader = new FileReader();
+  reader.readAsText(jsonFile);
+  reader.onload = function() {
+      // console.log(this.result);
+      const e = new CustomEvent('importTestGraph',{detail:this.result});
+      dispatchEvent(e);
+  }
 }
 
 
@@ -23,18 +43,21 @@ const dialogTableVisible = ref(false)
       <img style="max-height: 60px;" src="TestFramework.jpg" object-fit="scale-down"/>
     </el-col>
     <el-col :span="6">
-
     </el-col>
     <el-col :span="6">
-      <el-icon @click="dialogTableVisible = true" ><Tools /></el-icon>
-      <el-icon @click="sendExportEvent" title="导出测试图"><Download /></el-icon>
-      <el-icon @click="sendImportEvent" title="加载测试图"><FolderOpened /></el-icon>
+      <el-row justify="end">
+        <el-col :span="2"><el-icon @click="showUpload" title="加载测试图"><FolderOpened /></el-icon></el-col>  
+        <el-col :span="2"><el-icon @click="sendExportEvent" title="导出测试图"><Download /></el-icon></el-col>  
+        <el-col :span="2"><el-icon @click="dialogTableVisible = true" ><Tools /></el-icon></el-col>  
+      </el-row>
+      
+      
     </el-col>
-  </el-row>
+    <el-dialog v-model="dialogTableVisible" title="设置">
+      <div>这里还什么都没做呐</div>
+    </el-dialog>
 
-  <el-dialog v-model="dialogTableVisible" title="设置">
-    <div>这里还什么都没做呐</div>
-  </el-dialog>
+  </el-row>
 </template>
 
 <style scoped>
@@ -59,7 +82,6 @@ const dialogTableVisible = ref(false)
   float: right;
   padding-right: 10px;
 }
-
 
 .el-button--text {
   margin-right: 15px;

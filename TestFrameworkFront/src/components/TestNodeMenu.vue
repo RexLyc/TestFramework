@@ -18,7 +18,7 @@ class NodeMenuItem {
 
 onMounted(()=>{
     // 加载全部的节点
-    const categorySet = new Map<string,Array<tn.TypeToken>>();
+    const categorySet = new Map<string,Array<tn.NodeInterface>>();
     for(let type of tn.NodeFactory.nodeTypeMap.values()){
         if(!categorySet.get(type.categoryName))
             categorySet.set(type.categoryName,new Array());
@@ -64,7 +64,7 @@ function mousedown(event) {
                 </template>
                 <template v-for="item2 in item.children" >
                     <el-menu-item :index="item2.index" v-bind:key="item2" v-if="true" @mousedown="mousedown">
-                        <el-icon v-if="item2.index==tn.BeginNode.typeName" ><Position /></el-icon>
+                        <el-icon v-if="item2.index==tn.BeginNode.name" ><Position /></el-icon>
                         <el-icon v-if="item2.index==tn.EndNode.typeName"><SwitchButton /></el-icon>
                         <el-icon v-if="item2.index==tn.LogNode.typeName"><Document /></el-icon>
                         <el-icon v-if="item2.index==tn.ExtractNode.typeName"><Scissor /></el-icon>

@@ -7,6 +7,7 @@ import { h, getCurrentInstance, render, onMounted, watch } from 'vue'
 import '@/../Drawflow/src/drawflow.css'
 import Drawflow from '@/../Drawflow/src/drawflow.js'
 import '@/assets/custom-drawflow.css'
+import NodeDetail from './NodeDetail.vue'
 
 import * as tn from  '@/TestNode'
 import { ref } from 'vue'
@@ -65,6 +66,7 @@ function removeAllClass(className:string){
 }
 
 const HiddenCSS = "incompatible_param";
+const currentNode = ref();
 
 onMounted(()=>{
   const Vue = { version: 3, h, render };
@@ -83,7 +85,7 @@ onMounted(()=>{
       ,node.outputs
       ,node.pos_x
       ,node.pos_y
-      ,node.className
+      ,node.typeName
       ,node.data
       ,node.html);
     drawDataIdMap.set(String(drawId),node.name);
@@ -108,6 +110,8 @@ onMounted(()=>{
       // build menu
       outputData.value=tn.TestGraphFactory.exportNode(graph.graphName,nodeName);
       drawer.value=true;
+      detailGraphName.value = graph.graphName;
+      detailNodeName.value = nodeName;
     }
   })
 
@@ -117,7 +121,7 @@ onMounted(()=>{
     // for(const element of document.querySelectorAll("[class*="+tn.ParamCategoryEnums.All+"]")){
     //   (element as Element).classList.add('incompatible_param');
     // }
-    const paramCategoryName = graph.nameNodeMap.get(drawDataIdMap.get(detail.output_id))?.outputs.params[outputIndex].paramCategory;
+    const paramCategoryName = graph.nameNodeMap.get(drawDataIdMap.get(detail.output_id))?.outputs.params[outputIndex].categoryNames;
     for(const categoryName of paramCategoryName){
       removeClassFor(categoryName,HiddenCSS);
     }
@@ -158,7 +162,6 @@ onMounted(()=>{
     const element = document.getElementById('node-'+id);
     graph.nameNodeMap.get(drawDataIdMap.get(id)!)!.pos_x=Number(element?.style.left.slice(0,-2));
     graph.nameNodeMap.get(drawDataIdMap.get(id)!)!.pos_y=Number(element?.style.top.slice(0,-2));
-    console.log(element?.style.left.slice(0,-2),element?.style.top.slice(0,-2));
   });
   
   initTestGraph();
@@ -166,7 +169,20 @@ onMounted(()=>{
   addEventListener('importTestGraph',importGraph);
   addEventListener('exportTestGraph',exportGraph);
 
+
+  editor.on('keydown',(event)=>{
+    if(event.key=='*'){
+      resetView();
+    }
+  })
 })
+
+const clearAll=()=>{
+  editor.clear();
+  resetView();
+  drawDataIdMap.clear();
+  dataDrawIdMap.clear();
+}
 
 const initTestGraph = ()=>{
   graph = tn.TestGraphFactory.buildTestGraph("test")
@@ -176,12 +192,35 @@ const initTestGraph = ()=>{
 
 //TODO: 对导入的节点进行绘制
 const initNode = ()=>{
-
+  for(let node of graph.nameNodeMap.values()){
+    const drawId = editor.addNode(node.name
+      ,node.inputs
+      ,node.outputs
+      ,node.pos_x
+      ,node.pos_y
+      ,node.typeName
+      ,node.data
+      ,node.html);
+    drawDataIdMap.set(String(drawId),node.name);
+    dataDrawIdMap.set(node.name,String(drawId));
+  }
 }
 
 //TODO: 对导入的连接进行绘制
 const initConnections = ()=>{
-
+  for(let node of graph.nameNodeMap.values()){
+    for(let outputParam in node.outputs.params){
+      // console.log(outputParam);
+      for(let otherParam of node.outputs.params[outputParam].paramRef){
+        editor.addConnection(
+          dataDrawIdMap.get(node.name)
+          ,dataDrawIdMap.get(otherParam.substring(0,otherParam.indexOf('$')))
+          ,'output_'+(Number(outputParam)+1)
+          ,'input_'+(Number(otherParam.substring(otherParam.indexOf('$')+1))+1)
+        );
+      }
+    }
+  }
 }
 
 
@@ -190,26 +229,40 @@ const outputData = ref(new String);
 //TODO: 导出测试图
 const exportGraph = ()=>{
   var exportJson = tn.TestGraphFactory.exportGraph(graph.graphName);
-  console.log(exportJson)
+  // console.log(exportJson)
   outputData.value=exportJson;
   drawer.value=true;
   download('test.json',exportJson);
 }
 
+const waitGraph = ref();
+
 //TODO: 导入测试图
-const importGraph = ()=>{
-  // 环境检查
+const importGraph = (event)=>{
   // 重建测试图
+  waitGraph.value = tn.TestGraphFactory.importGraph(event.detail);
+  if(waitGraph.value != null){
+    dialogVisible.value=true;
+  }
+}
+
+const cleanAndDraw = (event)=>{
+  dialogVisible.value=false;
+  // 清空当前
+  clearAll();
+  tn.TestGraphFactory.removeTestGraph(graph.graphName);
+  tn.TestGraphFactory.addTestGraph(waitGraph.value);
+  graph = waitGraph.value;
+  console.log(graph);
   // 绘制节点
   initNode();
   // 绘制连接
   initConnections();
 }
 
-const drawflowKeyDown = (event:KeyboardEvent)=>{
-  if(event.key=='*'){
-    // reset position and scale
-    editor.zoom=1.0;
+const resetView=()=>{
+  // reset position and scale
+  editor.zoom=1.0;
     editor.zoom_value = 0.1;
     editor.zoom_last_value = 1;
     editor.precanvas.style.transform = "translate("+0+"px, "+0+"px) scale(1.0)";
@@ -223,8 +276,8 @@ const drawflowKeyDown = (event:KeyboardEvent)=>{
     editor.mouse_y = 0;
     transformX=0;
     transformY=0;
-  }
 }
+
 
 function download(filename, content) {
   const arraybuffer = new TextEncoder().encode(content).buffer;
@@ -241,17 +294,57 @@ function download(filename, content) {
   };
 }
 
+const dialogVisible = ref(false);
+
+// document.onkeydown=(event:KeyboardEvent)=>{
+//   if(event.key=='*'){
+//     resetView();
+//   }
+//   console.log("???");
+//   return true;
+// }
+
+
+const detailGraphName = ref("");
+const detailNodeName = ref("");
 </script>
 
 <template>
-  <div id="drawflow" @keydown="drawflowKeyDown"></div>
-  <el-drawer v-model="drawer" title="I am the title" :with-header="false">
-    <span>JsonData</span>
-    <el-text class="mx-1" size="large">{{ outputData }}</el-text>
-  </el-drawer>
+  <div id="container">
+    <div id="drawflow"></div>
+  
+      <el-drawer v-model="drawer" title="I am the title" :with-header="false">
+        <span>JsonData</span>
+        <el-text class="mx-1" size="large">{{ outputData }}</el-text>
+        <NodeDetail :graph-name="detailGraphName" :node-name="detailNodeName"/>
+      </el-drawer>
+      
+      <el-dialog
+        v-model="dialogVisible"
+        title="注意"
+        width="20%"
+      >
+        <span>将会清空当前测试图，并导入新测试图。请确认当前测试图已保存。</span>
+        <template #footer>
+          <span class="dialog-footer">
+            <el-button @click="dialogVisible = false">取消</el-button>
+            <el-button type="primary" @click="cleanAndDraw">
+              确认
+            </el-button>
+          </span>
+        </template>
+      </el-dialog>
+  </div>
 </template>
 
 <style scoped>
+#container {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
 #drawflow{
   height: 100%;
   overflow: hidden;

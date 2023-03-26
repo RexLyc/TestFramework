@@ -27,7 +27,7 @@ document.onmousedown=(event:MouseEvent)=>{
   if(element && element.id && tn.NodeFactory.nodeTypeMap.get(element.id)){
     beginPressed.value=true;
   }
-  return false; //避免选中文本
+  // return false; //避免选中文本
 }
 
 document.onmouseup=(event)=>{
@@ -46,7 +46,7 @@ document.onmouseup=(event)=>{
     dragDiv.value.remove();
   }
   dragDiv.value=null;
-  return false; //避免选中文本
+  // return false; //避免选中文本
 }
 
 document.onmousemove=(event)=>{
@@ -65,7 +65,7 @@ document.onmousemove=(event)=>{
     dragDiv.value.style.top=event.clientY+'px';
     dragDiv.value.style.left=event.clientX+'px';
   }
-  return false; //避免选中文本
+  // return false; //避免选中文本
 }
 
 </script>
