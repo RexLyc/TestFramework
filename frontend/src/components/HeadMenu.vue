@@ -40,7 +40,7 @@ const dialogTableVisible = ref(false)
 <template>
   <el-row class="row-bg" justify="space-between">
     <el-col :span="6">
-      <img style="max-height: 60px;" src="TestFramework.jpg" object-fit="scale-down"/>
+      <img style="max-height: 60px;" src="favicon.ico" object-fit="scale-down"/>
     </el-col>
     <el-col :span="6">
     </el-col>
