@@ -102,9 +102,10 @@ onMounted(()=>{
       return;
     let nodeName = null;
     if (e.target!.classList[0] == 'drawflow-node') { 
-      nodeName = (e.target as HTMLElement).getElementsByClassName('drawflow_content_node')[0].innerHTML;
+      // 由于允许html名称重复，必须使用id进行区分
+      nodeName = drawDataIdMap.get((e.target as HTMLElement).id.slice(5));
     } else if(e.target!.classList[0] == 'drawflow_content_node') {
-      nodeName = (e.target as HTMLElement).innerHTML;
+      nodeName = drawDataIdMap.get((e.target as HTMLElement).parentElement!.id.slice(5));
     }
     if(nodeName){
       // build menu
@@ -168,6 +169,7 @@ onMounted(()=>{
 
   addEventListener('importTestGraph',importGraph);
   addEventListener('exportTestGraph',exportGraph);
+  addEventListener('dataNodeChanged',nodeChanged);
 
 
   editor.on('keydown',(event)=>{
@@ -176,6 +178,18 @@ onMounted(()=>{
     }
   })
 })
+
+const nodeChanged = (event:CustomEvent)=>{
+  const graphName = event.detail.graphName;
+  const nodeName = event.detail.nodeName;
+  // 只是值修改
+  const node = tn.TestGraphFactory.getTestGraph(graphName).nameNodeMap.get(nodeName)!;
+  editor.updateNode(dataDrawIdMap.get(nodeName)
+    ,node.html
+    ,node.inputs
+    ,node.outputs);
+  outputData.value = tn.TestGraphFactory.exportNode(graph.graphName,nodeName);
+}
 
 const clearAll=()=>{
   editor.clear();
@@ -313,10 +327,14 @@ const detailNodeName = ref("");
   <div id="container">
     <div id="drawflow"></div>
   
-      <el-drawer v-model="drawer" title="I am the title" :with-header="false">
-        <span>JsonData</span>
-        <el-text class="mx-1" size="large">{{ outputData }}</el-text>
-        <NodeDetail :graph-name="detailGraphName" :node-name="detailNodeName"/>
+      <el-drawer v-model="drawer" title="I am the title" :with-header="false" margin="0" padding="0">
+        <el-scrollbar>
+          <div id="drawDiv">
+            <span>细节</span>
+            <NodeDetail :graph-name="detailGraphName" :node-name="detailNodeName"/>
+            <el-text class="mx-1" size="large">{{ outputData }}</el-text>
+          </div>
+        </el-scrollbar>
       </el-drawer>
       
       <el-dialog
@@ -338,6 +356,21 @@ const detailNodeName = ref("");
 </template>
 
 <style scoped>
+.el-drawer {
+  margin: 0px;
+  padding: 0px;
+}
+
+:deep(.el-drawer__body) {
+  margin: 0px;
+  padding: 0px;
+}
+
+#drawDiv {
+  margin: 0;
+  padding: 20px;
+}
+
 #container {
   height: 100%;
   width: 100%;

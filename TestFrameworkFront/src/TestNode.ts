@@ -329,7 +329,7 @@ export class ConstantNode {
             ,outputs
             ,pos_x
             ,pos_y
-            ,BeginNode.typeName
+            ,ConstantNode.typeName
             ,{}
             ,nodeName);
         return temp;
@@ -679,10 +679,10 @@ export class SwitchNode {
 
 // ====================== 实用工具 ====================== 
 // 默认翻译
-export const basicTranslate:Map<string,string> = new Map();
+export const basicNodeTranslate:Map<string,string> = new Map();
 // 翻译器
 export class NodeTranslator {
-    static lib:Map<string,string> = basicTranslate;
+    static lib:Map<string,string> = basicNodeTranslate;
 
     static loadTransLib(lib:Map<string,string>){
         this.lib=lib;
@@ -695,6 +695,31 @@ export class NodeTranslator {
         }
     }
 }
+
+export const basicParamTranslator:Map<string,string> = new Map();
+basicParamTranslator.set(ParamRuntimeTypeEnums.VarNameValue,'引用变量');
+basicParamTranslator.set(ParamRuntimeTypeEnums.StringValue,'字符串字面值');
+basicParamTranslator.set(ParamRuntimeTypeEnums.IntegerValue,'整型数字面值');
+basicParamTranslator.set(ParamRuntimeTypeEnums.FloatValue,'浮点数字面值');
+basicParamTranslator.set(ParamRuntimeTypeEnums.PythonValue,'Python脚本')
+
+
+export class ParamTranslator {
+    static lib:Map<string,string> = basicParamTranslator;
+    static loadTransLib(lib:Map<string,string>){
+        this.lib=lib;
+    }
+
+    static translate(english:string):string{
+        if(this.lib.get(english)==undefined){
+            return english;
+        } else {
+            return this.lib.get(english)!;
+        }
+    }
+}
+
+
 
 // 实用类型工具
 export class TypeTool {
@@ -829,30 +854,30 @@ export class ImportExportProtocol {
 
 
 // ====================== 加载时执行 ====================== 
-basicTranslate.set("CommonType","通用节点");
-basicTranslate.set("WebType","网络测试节点");
-basicTranslate.set("SerialType","串口测试节点");
-basicTranslate.set("FlowType","流程控制节点");
+basicNodeTranslate.set("CommonType","通用节点");
+basicNodeTranslate.set("WebType","网络测试节点");
+basicNodeTranslate.set("SerialType","串口测试节点");
+basicNodeTranslate.set("FlowType","流程控制节点");
 
-basicTranslate.set("BeginNode","测试起始节点");
-basicTranslate.set("EndNode","测试终止节点");
-basicTranslate.set("LogNode","日志节点");
-basicTranslate.set("ExtractNode","数据提取节点");
-basicTranslate.set("MergeNode","数据合并节点");
-basicTranslate.set("GlobalNode","全局配置节点");
-basicTranslate.set("SendNode","数据发送节点");
-basicTranslate.set("RecvNode","数据接收节点");
-basicTranslate.set("HttpNode","HTTP连接节点");
-basicTranslate.set("TCPNode","TCP连接节点");
-basicTranslate.set("UDPNode","UDP准备节点");
-basicTranslate.set("WebSocketNode","WebSocket连接节点");
-basicTranslate.set("SerialNode","串口连接节点");
-basicTranslate.set("IfNode","条件跳转节点");
-basicTranslate.set("SwitchNode","Switch跳转节点");
-basicTranslate.set("ConstantNode","常量节点");
-basicTranslate.set("AddMinusNode","加减法节点");
-basicTranslate.set("MultiDivNode","乘除法节点");
-basicTranslate.set("AddNode","加法节点");
+basicNodeTranslate.set("BeginNode","测试起始节点");
+basicNodeTranslate.set("EndNode","测试终止节点");
+basicNodeTranslate.set("LogNode","日志节点");
+basicNodeTranslate.set("ExtractNode","数据提取节点");
+basicNodeTranslate.set("MergeNode","数据合并节点");
+basicNodeTranslate.set("GlobalNode","全局配置节点");
+basicNodeTranslate.set("SendNode","数据发送节点");
+basicNodeTranslate.set("RecvNode","数据接收节点");
+basicNodeTranslate.set("HttpNode","HTTP连接节点");
+basicNodeTranslate.set("TCPNode","TCP连接节点");
+basicNodeTranslate.set("UDPNode","UDP准备节点");
+basicNodeTranslate.set("WebSocketNode","WebSocket连接节点");
+basicNodeTranslate.set("SerialNode","串口连接节点");
+basicNodeTranslate.set("IfNode","条件跳转节点");
+basicNodeTranslate.set("SwitchNode","Switch跳转节点");
+basicNodeTranslate.set("ConstantNode","常量节点");
+basicNodeTranslate.set("AddMinusNode","加减法节点");
+basicNodeTranslate.set("MultiDivNode","乘除法节点");
+basicNodeTranslate.set("AddNode","加法节点");
 
 NodeFactory.loadNodeLibrary(BeginNode)
 NodeFactory.loadNodeLibrary(EndNode)

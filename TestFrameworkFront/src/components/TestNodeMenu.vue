@@ -57,30 +57,34 @@ function mousedown(event) {
             <el-sub-menu v-bind:key="item" :index="item.index" v-if="item.children!=undefined && item.children.length!=0">
                 <template #title>
                     <el-icon v-if="item.index==tn.CategoryEnums.CommonType"><Star/></el-icon>
-                    <el-icon v-if="item.index==tn.CategoryEnums.WebType"><MostlyCloudy/></el-icon>
-                    <el-icon v-if="item.index==tn.CategoryEnums.FlowType"><Switch/></el-icon>
-                    <el-icon v-if="item.index==tn.CategoryEnums.SerialType"><Link/></el-icon>
+                    <el-icon v-else-if="item.index==tn.CategoryEnums.WebType"><MostlyCloudy/></el-icon>
+                    <el-icon v-else-if="item.index==tn.CategoryEnums.FlowType"><Switch/></el-icon>
+                    <el-icon v-else-if="item.index==tn.CategoryEnums.SerialType"><Link/></el-icon>
                     <span>{{tn.NodeTranslator.translate(item.index)}}</span>
+                    <!-- <span>{{ item.index }}</span> -->
                 </template>
-                <template v-for="item2 in item.children" >
+                <template v-for="item2 in item.children">
                     <el-menu-item :index="item2.index" v-bind:key="item2" v-if="true" @mousedown="mousedown">
-                        <el-icon v-if="item2.index==tn.BeginNode.name" ><Position /></el-icon>
-                        <el-icon v-if="item2.index==tn.EndNode.typeName"><SwitchButton /></el-icon>
-                        <el-icon v-if="item2.index==tn.LogNode.typeName"><Document /></el-icon>
-                        <el-icon v-if="item2.index==tn.ExtractNode.typeName"><Scissor /></el-icon>
-                        <el-icon v-if="item2.index==tn.MergeNode.typeName"><Paperclip /></el-icon>
-                        <el-icon v-if="item2.index==tn.GlobalNode.typeName"><Setting /></el-icon>
-                        <el-icon v-if="item2.index==tn.SendNode.typeName"><Ship /></el-icon>
-                        <el-icon v-if="item2.index==tn.RecvNode.typeName"><Box /></el-icon>
-                        <el-icon v-if="item2.index==tn.HttpNode.typeName"><ChromeFilled /></el-icon>
-                        <el-icon v-if="item2.index==tn.TCPNode.typeName"><PhoneFilled /></el-icon>
-                        <el-icon v-if="item2.index==tn.UDPNode.typeName"><PhoneFilled /></el-icon>
-                        <el-icon v-if="item2.index==tn.WebSocketNode.typeName"><PhoneFilled /></el-icon>
-                        <el-icon v-if="item2.index==tn.SerialNode.typeName"><MagicStick /></el-icon>
-                        <el-icon v-if="item2.index==tn.IfNode.typeName"><Guide /></el-icon>
-                        <el-icon v-if="item2.index==tn.SwitchNode.typeName"><List /></el-icon>
-                        <el-icon v-if="item2.index==tn.ConstantNode.typeName"><Lock /></el-icon>
+                        <el-icon v-if="item2.index==tn.BeginNode.typeName"><Position  /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.EndNode.typeName"><SwitchButton /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.LogNode.typeName"><Document /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.ExtractNode.typeName"><Scissor /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.MergeNode.typeName"><Paperclip /></el-icon>
+                        <!-- Setting 图标在windows下有可能卡顿，换掉 -->
+                        <!-- <el-icon v-else-if="item2.index==tn.GlobalNode.typeName"><Setting /></el-icon> -->
+                        <el-icon v-else-if="item2.index==tn.GlobalNode.typeName"><Van /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.SendNode.typeName"><Ship /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.RecvNode.typeName"><Box /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.ConstantNode.typeName"><Lock /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.HttpNode.typeName"><ChromeFilled /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.TCPNode.typeName"><PhoneFilled /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.UDPNode.typeName"><PhoneFilled /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.WebSocketNode.typeName"><PhoneFilled /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.SerialNode.typeName"><MagicStick /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.IfNode.typeName"><Guide /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.SwitchNode.typeName"><List /></el-icon>
                         <span :id="item2.index">{{tn.NodeTranslator.translate(item2.index)}}</span>
+                        <!-- <span>{{ item2.index }}</span> -->
                     </el-menu-item>
                 </template>
             </el-sub-menu>
@@ -93,5 +97,7 @@ function mousedown(event) {
 <style scoped>
 .el-menu-item>span {
     cursor: move;
+    /* 避免鼠标选中高亮 */
+    user-select: none;
 }
 </style>
