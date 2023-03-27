@@ -380,10 +380,13 @@ export class LogNode {
     static typeName = "LogNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
-        inputs.addParam(VariableParam,"data")
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"data");
+        const outputs = new InOutParams();
+        outputs.addParam(FlowParam,"next");
         const temp = new BaseNode(nodeName
             ,inputs
-            ,new InOutParams()
+            ,outputs
             ,pos_x
             ,pos_y
             ,LogNode.typeName
