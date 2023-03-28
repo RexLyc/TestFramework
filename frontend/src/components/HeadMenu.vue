@@ -35,6 +35,11 @@ const sendImportEvent=(event)=>{
 
 const dialogTableVisible = ref(false)
 
+const showRunTestGraph = (event)=>{
+  const e = new CustomEvent('runTestGraph')
+  dispatchEvent(e);
+}
+
 </script>
 
 <template>
@@ -46,6 +51,7 @@ const dialogTableVisible = ref(false)
     </el-col>
     <el-col :span="6">
       <el-row justify="end">
+        <el-col :span="2"><el-icon @click="showRunTestGraph" title="运行测试图"><VideoPlay /></el-icon></el-col>  
         <el-col :span="2"><el-icon @click="showUpload" title="加载测试图"><FolderOpened /></el-icon></el-col>  
         <el-col :span="2"><el-icon @click="sendExportEvent" title="导出测试图"><Download /></el-icon></el-col>  
         <el-col :span="2"><el-icon @click="dialogTableVisible = true" ><Tools /></el-icon></el-col>  

@@ -16,8 +16,8 @@ class TestRunError(RuntimeError):
 class BaseNode:
     def __init__(self, graph_node):
         self.name=graph_node['name']
-        self.inputs=graph_node['inputs']
-        self.outputs=graph_node['outputs']
+        self.inputs=graph_node['inputs']['params']
+        self.outputs=graph_node['outputs']['params']
         self.typeName=graph_node['typeName']
         self.data=graph_node['data']
 
@@ -25,7 +25,7 @@ class BaseNode:
         return 'Type: {}, Id: {}'.format(self.__class__, self.name)
 
     def _run(self,data=None):
-        return str(self.outputs['params'][0]['paramRef'][0]).partition('$')[0]
+        return str(self.outputs[0]['paramRef'][0]).partition('$')[0]
 
     # 执行运算，并返回下一个运行的节点
     def doRun(self,data):
@@ -57,10 +57,10 @@ class BeginNode(BaseNode):
 
 class ConstantNode(BaseNode):
     def _run(self,data):
-        for i in range(0,len(self.outputs['params'])):
-            type = Tools.getParamType(self.outputs['params'][i]['paramType'])
-            print('constant setting' + str(type(self.outputs['params'][i]['paramValue'])))
-            data[self.name+'$'+str(i)] = type(self.outputs['params'][i]['paramValue'])
+        for i in range(0,len(self.outputs)):
+            type = Tools.getParamType(self.outputs[i]['paramType'])
+            print('constant setting' + str(type(self.outputs[i]['paramValue'])))
+            data[self.name+'$'+str(i)] = type(self.outputs[i]['paramValue'])
 
 class EndNode(BaseNode):
     pass
@@ -74,15 +74,15 @@ class HttpFile(File):
 
 class HttpNode(BaseNode):
     def _run(self,data):
-        url = data[self.inputs['params'][1]['paramRef'][0]]
+        url = data[self.inputs[1]['paramRef'][0]]
         data[self.name+'$1']=HttpFile(url)
         return super()._run()
 
 class SendNode(BaseNode):
     def _run(self,data):
-        file = data[self.inputs['params'][1]['paramRef'][0]]
-        dataBody = data[self.inputs['params'][2]['paramRef'][0]]
-        timeout = data[self.inputs['params'][3]['paramRef'][0]]
+        file = data[self.inputs[1]['paramRef'][0]]
+        dataBody = data[self.inputs[2]['paramRef'][0]]
+        timeout = data[self.inputs[3]['paramRef'][0]]
         result = ''
         if isinstance(file,HttpFile):
             result = requests.post(file.file,data=dataBody,timeout=timeout).content
@@ -93,7 +93,7 @@ class SendNode(BaseNode):
 
 class LogNode(BaseNode):
     def _run(self,data):
-        logData = data[self.inputs['params'][1]['paramRef'][0]]
+        logData = data[self.inputs[1]['paramRef'][0]]
         Tools.log(data,self.name,logData)
         return super()._run()
 

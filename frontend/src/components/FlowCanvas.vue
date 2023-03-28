@@ -8,15 +8,26 @@ import '@/../Drawflow/src/drawflow.css'
 import Drawflow from '@/../Drawflow/src/drawflow.js'
 import '@/assets/custom-drawflow.css'
 import NodeDetail from './NodeDetail.vue'
+import GraphRunDetail from './GraphRunDetail.vue'
 
 import * as tn from  '@/TestNode'
 import { ref } from 'vue'
 
-const drawer = ref(false)
+const detailDrawler = ref(false)
 
 let editor: Drawflow;
 let graph:tn.TestGraph;
 let transformX:number=0,transformY: number=0;
+const outputData = ref(new String);
+const waitGraph = ref();
+const dialogVisible = ref(false);
+const detailGraphName = ref("");
+const detailNodeName = ref("");
+const graphRunDrawler = ref(false);
+
+// 绘制节点id和数据节点id映射(双向)
+const drawDataIdMap = new Map<string,string>();
+const dataDrawIdMap = new Map<string,string>();
 
 const props = defineProps({
   newNode: String,
@@ -24,9 +35,6 @@ const props = defineProps({
   pos_y:Number
 })
 
-// 绘制节点id和数据节点id映射(双向)
-const drawDataIdMap = new Map<string,string>();
-const dataDrawIdMap = new Map<string,string>();
 
 watch(props,()=>{
   // 需要计算canvas 左上角、transform、scale
@@ -74,7 +82,7 @@ onMounted(()=>{
   editor = new Drawflow(id, Vue);
   editor.start();
 
-  addEventListener('TGAddNewNode',(event:Event)=>{
+  addEventListener('TGAddNewNode',(event:any)=>{
     const newNode:tn.TGAddNewNode = event.detail;
     const node:tn.BaseNode = tn.TestGraphFactory
       .getTestGraph(newNode.testGraph)
@@ -97,7 +105,7 @@ onMounted(()=>{
     transformY = pos.y;
     // console.log(transformX,transformY)
   })
-  editor.on('dblclick',(e:Event)=>{
+  editor.on('dblclick',(e:any)=>{
     if(e.target==null || e.target.classList==null || e.target.classList[0] ==null)
       return;
     let nodeName = null;
@@ -110,25 +118,25 @@ onMounted(()=>{
     if(nodeName){
       // build menu
       outputData.value=tn.TestGraphFactory.exportNode(graph.graphName,nodeName);
-      drawer.value=true;
+      detailDrawler.value=true;
       detailGraphName.value = graph.graphName;
       detailNodeName.value = nodeName;
     }
   })
 
-  editor.on('connectionStart',(detail)=>{
+  editor.on('connectionStart',(detail:any)=>{
     const outputIndex:number =detail.output_class.slice(7) - 1;
     addClassFor(tn.ParamCategoryEnums.All,HiddenCSS);
     // for(const element of document.querySelectorAll("[class*="+tn.ParamCategoryEnums.All+"]")){
     //   (element as Element).classList.add('incompatible_param');
     // }
-    const paramCategoryName = graph.nameNodeMap.get(drawDataIdMap.get(detail.output_id))?.outputs.params[outputIndex].categoryNames;
-    for(const categoryName of paramCategoryName){
+    const paramCategoryName = graph.nameNodeMap.get(drawDataIdMap.get(detail.output_id)!)?.outputs.params[outputIndex].categoryNames;
+    for(const categoryName of paramCategoryName!){
       removeClassFor(categoryName,HiddenCSS);
     }
   });
 
-  editor.on('connectionCreated',(detail)=>{
+  editor.on('connectionCreated',(detail:any)=>{
     removeAllClass('incompatible_param');
     // 更新数据节点
     graph.addConnection(drawDataIdMap.get(detail.output_id)!
@@ -137,11 +145,11 @@ onMounted(()=>{
       ,detail.input_class.slice(6)-1);
   });
 
-  editor.on('connectionCancel',(isCancel)=>{
+  editor.on('connectionCancel',(isCancel:boolean)=>{
     removeAllClass('incompatible_param');
   })
 
-  editor.on('connectionRemoved',(detail)=>{
+  editor.on('connectionRemoved',(detail:any)=>{
     console.log('connection %o removing',detail);
     graph.removeConnection(drawDataIdMap.get(detail.output_id)!
       ,detail.output_class.slice(7)-1
@@ -152,7 +160,7 @@ onMounted(()=>{
 
   editor.on('nodeRemoved',(id:string)=>{
     console.log('node %o removing',id);
-    const dataId = drawDataIdMap.get(id);
+    const dataId = drawDataIdMap.get(id)!;
     drawDataIdMap.delete(id);
     graph.removeNode(dataId);
     dataDrawIdMap.delete(dataId);
@@ -169,17 +177,23 @@ onMounted(()=>{
 
   addEventListener('importTestGraph',importGraph);
   addEventListener('exportTestGraph',exportGraph);
-  addEventListener('dataNodeChanged',nodeChanged);
+  addEventListener('dataNodeChanged',dataNodeChanged);
+  addEventListener('runTestGraph',runTestGraph);
 
 
-  editor.on('keydown',(event)=>{
+  editor.on('keydown',(event:any)=>{
     if(event.key=='*'){
       resetView();
     }
   })
 })
 
-const nodeChanged = (event:CustomEvent)=>{
+const runTestGraph = (event:any) => {
+  graphRunDrawler.value=true;
+  detailGraphName.value = graph.graphName;
+}
+
+const dataNodeChanged = (event:any)=>{
   const graphName = event.detail.graphName;
   const nodeName = event.detail.nodeName;
   // 只是值修改
@@ -237,22 +251,18 @@ const initConnections = ()=>{
   }
 }
 
-
-const outputData = ref(new String);
-
 //TODO: 导出测试图
 const exportGraph = ()=>{
   var exportJson = tn.TestGraphFactory.exportGraph(graph.graphName);
   // console.log(exportJson)
   outputData.value=exportJson;
-  drawer.value=true;
+  detailDrawler.value=true;
   download('test.json',exportJson);
 }
 
-const waitGraph = ref();
 
 //TODO: 导入测试图
-const importGraph = (event)=>{
+const importGraph = (event:any)=>{
   // 重建测试图
   waitGraph.value = tn.TestGraphFactory.importGraph(event.detail);
   if(waitGraph.value != null){
@@ -260,7 +270,7 @@ const importGraph = (event)=>{
   }
 }
 
-const cleanAndDraw = (event)=>{
+const cleanAndDraw = (event:any)=>{
   dialogVisible.value=false;
   // 清空当前
   clearAll();
@@ -293,12 +303,12 @@ const resetView=()=>{
 }
 
 
-function download(filename, content) {
+function download(filename:string, content:string) {
   const arraybuffer = new TextEncoder().encode(content).buffer;
   const blob = new Blob([arraybuffer], { type: 'text/plain;base64' });
   const reader = new FileReader();
   reader.readAsDataURL(blob);
-  reader.onload = (event) => {
+  reader.onload = (event:any) => {
     const element = document.createElement('a');
     element.href = event.target.result;
     element.download = filename;
@@ -308,33 +318,25 @@ function download(filename, content) {
   };
 }
 
-const dialogVisible = ref(false);
-
-// document.onkeydown=(event:KeyboardEvent)=>{
-//   if(event.key=='*'){
-//     resetView();
-//   }
-//   console.log("???");
-//   return true;
-// }
-
-
-const detailGraphName = ref("");
-const detailNodeName = ref("");
 </script>
 
 <template>
   <div id="container">
     <div id="drawflow"></div>
   
-      <el-drawer v-model="drawer" title="I am the title" :with-header="false" margin="0" padding="0">
+      <el-drawer v-model="detailDrawler" title="细节" margin="0" padding="0">
         <el-scrollbar>
           <div id="drawDiv">
-            <span>细节</span>
             <NodeDetail :graph-name="detailGraphName" :node-name="detailNodeName"/>
             <el-text class="mx-1" size="large">{{ outputData }}</el-text>
           </div>
         </el-scrollbar>
+      </el-drawer>
+
+      <el-drawer v-model="graphRunDrawler" size="70%" title="执行测试图" margin="0" padding="0">
+        <div id="runGraphDiv">
+          <GraphRunDetail :graph-name="detailGraphName"/>
+        </div>
       </el-drawer>
       
       <el-dialog
@@ -366,7 +368,11 @@ const detailNodeName = ref("");
   padding: 0px;
 }
 
-#drawDiv {
+:deep(.el-drawer__header) {
+  margin-bottom: 0px;
+}
+
+#drawDiv,#runGraphDiv {
   margin: 0;
   padding: 20px;
 }
