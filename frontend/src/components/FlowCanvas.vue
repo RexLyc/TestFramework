@@ -189,8 +189,8 @@ onMounted(()=>{
 })
 
 const runTestGraph = (event:any) => {
-  graphRunDrawler.value=true;
   detailGraphName.value = graph.graphName;
+  graphRunDrawler.value = true;
 }
 
 const dataNodeChanged = (event:any)=>{

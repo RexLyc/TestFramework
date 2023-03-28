@@ -1,15 +1,33 @@
 import json
 import time
 import requests
+from enum import Enum
+
+class CommonResponseEnum(Enum):
+    SUCCESS       = 0,
+    INCOMPATIBLE  = 1,
+    BUSY          = 2,
+    EXCEPTION     = 3
+
+class CommonResponse(dict):
+    def __init__(self,msg,code):
+        self.msg=msg
+        self.code=code
+        dict.__init__(self,msg=msg,code=code)
 
 class RunResult(dict):
-    def __init__(self,isSuccess,timeElapsed,log):
+    def __init__(self,isSuccess,isException,timeElapsed,log):
         self.isSuccess=isSuccess
+        self.isException=isException
         self.timeElapsed=timeElapsed
         self.log=log
-        dict.__init__(self,isSuccess=isSuccess,timeElapsed=timeElapsed,log=log)
+        dict.__init__(self,isSuccess=isSuccess,isException=isException,timeElapsed=timeElapsed,log=log)
 
 class TestRunError(RuntimeError):
+    def __init__(self,msg):
+        self.msg=msg
+
+class IncompatibleError(RuntimeError):
     def __init__(self,msg):
         self.msg=msg
 
@@ -41,10 +59,10 @@ class Tools:
         elif typeName == 'FloatValue':
             return float
         elif typeName == 'PythonValue':
-            raise TestRunError('unsupport paramRuntimeType')
+            raise IncompatibleError('unsupport paramRuntimeType')
     
     @staticmethod
-    def log(global_data,loggerName,logData):
+    def log(global_data,logData,loggerName='Default'):
         print('logging {}'.format(logData))
         if '$$log' not in global_data:
             global_data['$$log'] = ''
@@ -94,7 +112,7 @@ class SendNode(BaseNode):
 class LogNode(BaseNode):
     def _run(self,data):
         logData = data[self.inputs[1]['paramRef'][0]]
-        Tools.log(data,self.name,logData)
+        Tools.log(data,logData,self.name)
         return super()._run()
 
 class NodeFactory:
@@ -114,7 +132,7 @@ class NodeFactory:
             return LogNode(graph_node=graph_node)
         else:
             print('unsupport node: {},pass'.format(graph_node['typeName']))
-            raise(RuntimeError('unsupport node: {},pass'.format(graph_node['typeName'])))
+            raise IncompatibleError('unsupport node: {},pass'.format(graph_node['typeName']))
 
 class TestGraph:
     def __init__(self,global_data,nodes,startName,endName):
@@ -127,24 +145,27 @@ class TestGraph:
         # 传递变量区
         currentNode = self.nodes[self.startName]
         isSuccess=False
+        isException=False
         a=time.time()
         try:
-            Tools.log(self.global_data,'Default','begin running')
+            Tools.log(self.global_data,'begin running')
             while isinstance(currentNode,EndNode) != True:
                 print(currentNode.name +' running')
                 name = currentNode.doRun(self.global_data)
                 print('next:{}'.format(name))
                 currentNode = self.nodes[name]
             isSuccess=True
-            Tools.log(self.global_data,'Default','end running')
-        except RuntimeError as err:
-            print(err)
+            Tools.log(self.global_data,'end running')
+        except TestRunError as err:
+            isException=True
+            Tools.log(self.global_data,'TestRun error: {}'.format(err))
         except Exception as err:
-            print('fatal error: {}'.format(err))
+            isException=True
+            Tools.log(self.global_data,'fatal error: {}'.format(err))
         b=time.time()
         print('time elapsed :{}'.format(b-a))
         print(self.global_data)
-        return RunResult(isSuccess,b-a,self.global_data['$$log'])
+        return RunResult(isSuccess,isException,b-a,self.global_data['$$log'])
 
 class TestGraphFactory:
     @staticmethod
