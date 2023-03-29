@@ -13,7 +13,8 @@ enum GraphRunStateEnum {
   RUNNING       = '运行中',
   SUCCESS       = '测试成功',
   FAILED        = '测试失败',
-  EXCEPTION     = '测试异常'
+  EXCEPTION     = '测试异常',
+  INCOMPATIBLE  = '不兼容',
 }
 
 enum ServerLinkStateEnum {
@@ -21,18 +22,13 @@ enum ServerLinkStateEnum {
   WAITING       = '空闲',
   BUSY          = '繁忙',
   OFFLINE       = '离线',
-  INCOMPATIBLE  = '不兼容',
   EXCEPTION     = '连接异常'
 }
 
 class RunResult{
-  isSuccess:boolean
-  isException:boolean
   timeElapsed:number
   log:string
-  constructor(isSuccess:boolean,isException:boolean,timeElasped:number,log:string){
-    this.isSuccess=isSuccess;
-    this.isException=isException;
+  constructor(timeElasped:number,log:string){
     this.timeElapsed=timeElasped;
     this.log=log;
   }
@@ -43,14 +39,15 @@ enum CommonResponseEnum {
   INCOMPATIBLE  = 1,
   BUSY          = 2,
   EXCEPTION     = 3,
+  FAILED        = 4,
 }
 
-class CommonResponse {
-  msg:string
+class CommonResponse<T = any> {
   code:number;
-  constructor(msg:string,code:number){
-    this.msg=msg;
+  data:T;
+  constructor(code:number,data:T){
     this.code=code;
+    this.data=data;
   }
 }
 
@@ -77,14 +74,12 @@ class ServerInfo{
       ,tn.TestGraphFactory.exportGraph(graphName)
       ,(resp:any)=>{
         if(resp.status===200){
-          // success run over
-          const commonResp = new CommonResponse(resp.data.msg,resp.data.code);
+          // success run over 
+          const commonResp = new CommonResponse(resp.data.code,{});
           if(commonResp.code===CommonResponseEnum.BUSY)
             this.link=ServerLinkStateEnum.BUSY;
           else if(commonResp.code===CommonResponseEnum.SUCCESS)
             this.link=ServerLinkStateEnum.WAITING;
-          else if(commonResp.code===CommonResponseEnum.INCOMPATIBLE)
-            this.link=ServerLinkStateEnum.INCOMPATIBLE;
           else if(commonResp.code===CommonResponseEnum.EXCEPTION)
             this.link=ServerLinkStateEnum.EXCEPTION;
         } else {
@@ -106,10 +101,18 @@ class ServerInfo{
       ,(resp:any) => {
         if(resp.status===200){
           // success run over
-          const runResult = new RunResult(resp.data.isSuccess,resp.data.isException,resp.data.timeElapsed,resp.data.log);
-          this.runState = runResult.isSuccess?GraphRunStateEnum.SUCCESS:GraphRunStateEnum.FAILED;
-          this.runState = runResult.isException?GraphRunStateEnum.EXCEPTION:this.runState;
-          this.log = runResult.log;
+          const runResult = new CommonResponse<RunResult>(resp.data.code
+          ,new RunResult(resp.data.data.timeElapsed,resp.data.data.log));
+          if(runResult.code==CommonResponseEnum.SUCCESS){
+            this.runState = GraphRunStateEnum.SUCCESS;
+          } else if(runResult.code==CommonResponseEnum.EXCEPTION){
+            this.runState = GraphRunStateEnum.EXCEPTION;
+          } else if(runResult.code==CommonResponseEnum.INCOMPATIBLE){
+            this.runState = GraphRunStateEnum.INCOMPATIBLE;
+          } else if(runResult.code==CommonResponseEnum.FAILED){
+            this.runState = GraphRunStateEnum.FAILED;
+          }
+          this.log = runResult.data.log;
         } else {
           this.log = resp.statusText;
           this.runState = GraphRunStateEnum.EXCEPTION;
@@ -190,6 +193,14 @@ const addTestServer = ()=>{
 }
 
 const runAllTest = ()=>{
+  if(multipleSelection.value.length==0){
+    ElNotification.error({
+      title: '注意',
+      message: '请选择要运行测试的服务器',
+      showClose: false,
+      duration: 1000
+    })
+  }
   for(let server of multipleSelection.value){
     server.updateRunState(props.graphName!);
   }
@@ -223,7 +234,27 @@ const multipleSelection = ref<ServerInfo[]>([])
 const handleSelectionChange = (val: ServerInfo[]) => {
   multipleSelection.value = val
 }
+const handleRowClick = (row:any,column:any,event:any)=>{
+  if(column==null)
+    return;
+  console.log(column,event.srcElement);
+  if(multipleSelection.value.includes(row)){
+    multipleSelection.value.slice(multipleSelection.value.findIndex((value)=>{return value===row}),1);
+    multipleTableRef.value?.toggleRowSelection(row,false);
+  } else {
+    multipleSelection.value.push(row);
+    multipleTableRef.value?.toggleRowSelection(row,true);
+  }
+}
 
+const logDownload=(row:any)=>{
+  ElNotification.error({
+      title: '注意',
+      message: '尚未实装',
+      showClose: false,
+      duration: 1000
+    })
+}
 </script>
 
 <template>
@@ -251,39 +282,40 @@ const handleSelectionChange = (val: ServerInfo[]) => {
           </el-select>
           <el-button @click="addTestServer" type="primary">添加</el-button>
           <el-button @click="runAllTest" type="success">执行测试</el-button>
+          <el-button @click="logDownload" type="info">获取日志</el-button>
         </el-space>
         <el-button @click="handleDelete" type="danger" style="position:absolute;right: 0px;"><el-icon><Delete/></el-icon></el-button>
-        <el-table ref="multipleTableRef" :data="serverTable" @selection-change="handleSelectionChange">
+        <el-table ref="multipleTableRef" :data="serverTable" @selection-change="handleSelectionChange" @row-click="handleRowClick">
           <el-table-column type="selection" width="55" />
-          <el-table-column prop="name" label="名称">
+          <el-table-column prop="name" label="名称" min-width="20px">
           </el-table-column>
 
-          <el-table-column prop="address" label="地址">
+          <el-table-column prop="address" label="地址" min-width="50px">
           </el-table-column>
 
-          <el-table-column label="连接状态">
+          <el-table-column label="连接状态" min-width="50px">
             <template #default="scope">
               <el-tag v-if="scope.row.link==ServerLinkStateEnum.WAITING" effect="dark" size="large" type="success">{{ scope.row.link }}</el-tag>
-              <el-tag v-if="scope.row.link==ServerLinkStateEnum.INCOMPATIBLE
-                              ||scope.row.link==ServerLinkStateEnum.UNKNOWN" effect="dark" size="large" type="info">{{ scope.row.link }}</el-tag>
+              <el-tag v-if="scope.row.link==ServerLinkStateEnum.UNKNOWN" effect="dark" size="large" type="info">{{ scope.row.link }}</el-tag>
               <el-tag v-if="scope.row.link==ServerLinkStateEnum.BUSY" effect="dark" size="large" type="warning">{{ scope.row.link }}</el-tag>
               <el-tag v-if="scope.row.link==ServerLinkStateEnum.OFFLINE
                               ||scope.row.link==ServerLinkStateEnum.EXCEPTION" effect="dark" size="large" type="danger">{{ scope.row.link }}</el-tag>
             </template>
           </el-table-column>
           
-          <el-table-column label="运行状态">
+          <el-table-column label="运行状态" min-width="50px">
             <template #default="scope">
               <el-tag v-if="scope.row.runState==GraphRunStateEnum.WAITING
                               ||scope.row.runState==GraphRunStateEnum.PREPARING" effect="dark" size="large">{{ scope.row.runState }}</el-tag>
               <el-tag v-if="scope.row.runState==GraphRunStateEnum.SUCCESS" effect="dark" size="large" type="success">{{ scope.row.runState }}</el-tag>
               <el-tag v-if="scope.row.runState==GraphRunStateEnum.UNKNOWN" effect="dark" size="large" type="info">{{ scope.row.runState }}</el-tag>
               <el-tag v-if="scope.row.runState==GraphRunStateEnum.FAILED
+                              ||scope.row.runState==GraphRunStateEnum.INCOMPATIBLE
                               ||scope.row.runState==GraphRunStateEnum.EXCEPTION" effect="dark" size="large" type="danger">{{ scope.row.runState }}</el-tag>
             </template>
           </el-table-column>
           
-          <el-table-column prop="log" label="运行日志">
+          <el-table-column prop="log" label="运行日志" show-overflow-tooltip min-width="300px">
           </el-table-column>
         </el-table>
     </el-scrollbar>
@@ -291,5 +323,12 @@ const handleSelectionChange = (val: ServerInfo[]) => {
 </template>
 
 <style scoped>
-
+:deep(.el-popper){
+  word-break:normal; 
+  max-width: 300px; 
+  display:block; 
+  white-space: pre-wrap;
+  word-wrap : break-word ;
+  overflow: hidden ;
+}
 </style>

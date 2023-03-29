@@ -1,27 +1,14 @@
 import json
 import time
 import requests
+from queue import Queue
 from enum import Enum
 
-class CommonResponseEnum(Enum):
-    SUCCESS       = 0,
-    INCOMPATIBLE  = 1,
-    BUSY          = 2,
-    EXCEPTION     = 3
-
-class CommonResponse(dict):
-    def __init__(self,msg,code):
-        self.msg=msg
-        self.code=code
-        dict.__init__(self,msg=msg,code=code)
-
 class RunResult(dict):
-    def __init__(self,isSuccess,isException,timeElapsed,log):
-        self.isSuccess=isSuccess
-        self.isException=isException
+    def __init__(self,timeElapsed,log):
         self.timeElapsed=timeElapsed
         self.log=log
-        dict.__init__(self,isSuccess=isSuccess,isException=isException,timeElapsed=timeElapsed,log=log)
+        dict.__init__(self,timeElapsed=timeElapsed,log=log)
 
 class TestRunError(RuntimeError):
     def __init__(self,msg):
@@ -43,7 +30,10 @@ class BaseNode:
         return 'Type: {}, Id: {}'.format(self.__class__, self.name)
 
     def _run(self,data=None):
-        return str(self.outputs[0]['paramRef'][0]).partition('$')[0]
+        next = []
+        for nextNode in self.outputs[0]['paramRef']:
+            next.append(str(nextNode).partition('$')[0])
+        return next
 
     # 执行运算，并返回下一个运行的节点
     def doRun(self,data):
@@ -66,7 +56,7 @@ class Tools:
         print('logging {}'.format(logData))
         if '$$log' not in global_data:
             global_data['$$log'] = ''
-        global_data['$$log'] = global_data['$$log'] + '{} - {}: {}\r\n'.format(time.time(),loggerName,logData)
+        global_data['$$log'] = global_data['$$log'] + '{} - {}: {}\n'.format(time.time(),loggerName,logData)
         
 
 class BeginNode(BaseNode):
@@ -81,7 +71,8 @@ class ConstantNode(BaseNode):
             data[self.name+'$'+str(i)] = type(self.outputs[i]['paramValue'])
 
 class EndNode(BaseNode):
-    pass
+    def _run(self,data):
+        return []
 
 class File:
     def __init__(self,file):
@@ -140,32 +131,29 @@ class TestGraph:
         self.nodes=nodes
         self.startName=startName
         self.endName=endName
+        self.runQueue = Queue()
+        self.lastRunNode = None
     
     def run(self):
         # 传递变量区
-        currentNode = self.nodes[self.startName]
-        isSuccess=False
-        isException=False
+        self.runQueue.put(self.nodes[self.startName])
         a=time.time()
-        try:
-            Tools.log(self.global_data,'begin running')
-            while isinstance(currentNode,EndNode) != True:
-                print(currentNode.name +' running')
-                name = currentNode.doRun(self.global_data)
-                print('next:{}'.format(name))
-                currentNode = self.nodes[name]
-            isSuccess=True
-            Tools.log(self.global_data,'end running')
-        except TestRunError as err:
-            isException=True
-            Tools.log(self.global_data,'TestRun error: {}'.format(err))
-        except Exception as err:
-            isException=True
-            Tools.log(self.global_data,'fatal error: {}'.format(err))
+        Tools.log(self.global_data,'begin running')
+        while not self.runQueue.empty():
+            currentNode = self.runQueue.get()
+            print(currentNode.name +' running')
+            nextNodes = currentNode.doRun(self.global_data)
+            print('next: {}'.format(nextNodes))
+            for node in nextNodes:
+                self.runQueue.put(self.nodes[node])
+            self.lastRunNode = currentNode
+        Tools.log(self.global_data,'end running')
         b=time.time()
-        print('time elapsed :{}'.format(b-a))
-        print(self.global_data)
-        return RunResult(isSuccess,isException,b-a,self.global_data['$$log'])
+        Tools.log(self.global_data,'time elapsed :{}'.format(b-a))
+        if not isinstance(self.lastRunNode,EndNode):
+            Tools.log(self.global_data,'Test ended at Non-EndNode')
+            raise TestRunError('Test ended at Non-EndNode')
+        return RunResult(b-a,self.global_data['$$log'])
 
 class TestGraphFactory:
     @staticmethod

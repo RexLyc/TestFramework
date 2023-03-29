@@ -241,8 +241,10 @@ export class TestGraph {
     static fromJSON(jsonObject:any):TestGraph{
         const graph = new TestGraph(jsonObject.graphName);
         graph.nameCountMap=new Map(jsonObject.nameCountMap);
+        console.log('nameNodeMap: %o',jsonObject.nameNodeMap)
         const tempNameNodeMap = new Map(jsonObject.nameNodeMap);
         for(let node of tempNameNodeMap.entries()){
+            console.log(node[1]);
             graph.nameNodeMap.set(node[0] as string,BaseNode.fromJSON(node[1]));
         }
         return graph;
@@ -288,6 +290,7 @@ export class BaseNode {
     }
 
     static fromJSON(jsonObject:any):BaseNode{
+        console.log('BaseNode: %o',jsonObject.inputs)
         return new BaseNode(jsonObject.name
             ,InOutParams.fromJSON(jsonObject.inputs)
             ,InOutParams.fromJSON(jsonObject.outputs)
@@ -839,7 +842,9 @@ export class ImportExportProtocol {
     */
     static version:number=1;
     static importGraph(graphJson:string):TestGraph{
+        console.log('origin: %o',graphJson);
         const jsonObject = JSON.parse(graphJson);
+        console.log('object: %o',jsonObject);
         if(jsonObject.meta.version > this.version){
             throw Error("incompable data version");
         }
