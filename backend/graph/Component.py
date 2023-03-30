@@ -110,20 +110,20 @@ class BaseNode:
     def __str__(self):
         return 'Type: {}, Id: {}'.format(self.__class__, self.name)
 
-    def _run(self,data=None):
+    def _run(self,data,prevNode):
         pass
 
-    def _post(self,data=None):
+    def _post(self,data,prevNode):
         next = []
         for nextNode in self.outputs[0]['paramRef']:
             next.append(str(nextNode).partition('$')[0])
         return next
 
     # 执行运算，并返回下一个运行的节点
-    def doRun(self,data):
+    def doRun(self,data,prevNode=None):
         try:
-            self._run(data)
-            return self._post(data)
+            self._run(data,prevNode)
+            return self._post(data,prevNode)
         except TestError as err:
             raise err
         except Exception as err:
@@ -133,7 +133,7 @@ class BeginNode(BaseNode):
     pass
 
 class ConstantNode(BaseNode):
-    def _run(self,data):
+    def _run(self,data,prevNode):
         for i in range(0,len(self.outputs)):
             runType = Tools.getParamType(self.outputs[i]['paramType'])
             if runType == None:
@@ -145,17 +145,17 @@ class ConstantNode(BaseNode):
             data[self.name+'$'+str(i)] = runType(self.outputs[i]['paramValue'])
 
 class EndNode(BaseNode):
-    def _post(self,data):
+    def _post(self,data,prevNode):
         return []
 
 class HttpNode(BaseNode):
-    def _run(self,data):
+    def _run(self,data,prevNode):
         url = data[self.inputs[1]['paramRef'][0]]
         method = data[self.inputs[2]['paramRef'][0]]
         data[self.name+'$1']=HttpFile(url,method)
 
 class SendNode(BaseNode):
-    def _run(self,data):
+    def _run(self,data,prevNode):
         file = data[self.inputs[1]['paramRef'][0]]
         dataBody = data[self.inputs[2]['paramRef'][0]]
         timeout = data[self.inputs[3]['paramRef'][0]]
@@ -176,32 +176,32 @@ class SendNode(BaseNode):
         data[self.name+'$1']=result
 
 class LogNode(BaseNode):
-    def _run(self,data):
+    def _run(self,data,prevNode):
         logData = data[self.inputs[1]['paramRef'][0]]
         Tools.log(data,logData,self.name)
 
 class ExtractNode(BaseNode):
-    def _run(self,data):
+    def _run(self,data,prevNode):
         inputData = data[self.inputs[1]['paramRef'][0]]
         outputData = outputData = inputData[data[self.inputs[2]['paramRef'][0]]:data[self.inputs[3]['paramRef'][0]]]
         data[self.name+'$1']=outputData
 
 class MergeNode(BaseNode):
-    def _run(self,data):
+    def _run(self,data,prevNode):
         data_1 = data[self.inputs[1]['paramRef'][0]]
         data_2 = data[self.inputs[2]['paramRef'][0]]
         outputData = data_1 + data_2
         data[self.name+'$1']=outputData
 
 class TCPNode(BaseNode):
-    def _run(self,data):
+    def _run(self,data,prevNode):
         addr = data[self.inputs[1]['paramRef'][0]]
         port = data[self.inputs[2]['paramRef'][0]]
         tcpFile = TcpFile(Tools.createTcpFile(addr,port))
         data[self.name+'$1'] = tcpFile
 
 class RecvNode(BaseNode):
-    def _run(self,data):
+    def _run(self,data,prevNode):
         file = data[self.inputs[1]['paramRef'][0]]
         timeout = data[self.inputs[2]['paramRef'][0]] / 1000.0
         outputData = None
@@ -220,7 +220,7 @@ class RecvNode(BaseNode):
         data[self.name+'$1'] = outputData
 
 class WebSocketNode(BaseNode):
-    def _run(self,data):
+    def _run(self,data,prevNode):
         url = data[self.inputs[1]['paramRef'][0]]
         new_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(new_loop)
@@ -228,7 +228,7 @@ class WebSocketNode(BaseNode):
         data[self.name+'$1'] = outputData
 
 class IfNode(BaseNode):
-    def _post(self,data):
+    def _post(self,data,prevNode):
         condition = data[self.inputs[1]['paramRef'][0]]
         print(condition)
         next = []
@@ -241,6 +241,73 @@ class IfNode(BaseNode):
         else:
             raise TestRuntimeError(self.name,'invalid condition: {}'.format(condition))
         return next
+
+class AddMinusNode(BaseNode):
+    def _run(self,data,prevNode):
+        result = 0
+        for plus in self.inputs[1]['paramRef']:
+            result += data[plus]
+        for minus in self.inputs[2]['paramRef']:
+            result -= data[minus]
+        data[self.name+'$1'] = result
+
+class MultiDivNode(BaseNode):
+    def _run(self,data,prevNode):
+        result = 1
+        for mul in self.inputs[1]['paramRef']:
+            result *= data[mul]
+        for div in self.inputs[2]['paramRef']:
+            result /= data[div]
+        data[self.name+'$1'] = result
+
+class BiggerNode(BaseNode):
+    def _run(self,data,prevNode):
+        data_1 = data[self.inputs[1]['paramRef'][0]]
+        data_2 = data[self.inputs[2]['paramRef'][0]]
+        data[self.name+'$1'] = data_1 > data_2
+
+class EqualNode(BaseNode):
+    def _run(self,data,prevNode):
+        data_1 = data[self.inputs[1]['paramRef'][0]]
+        data_2 = data[self.inputs[2]['paramRef'][0]]
+        data[self.name+'$1'] = (data_1 == data_2)
+
+class AndNode(BaseNode):
+    def _run(self,data,prevNode):
+        condition_1 = data[self.inputs[1]['paramRef'][0]]
+        condition_2 = data[self.inputs[2]['paramRef'][0]]
+        data[self.name+'$1'] = (condition_1 and condition_2)
+
+class OrNode(BaseNode):
+    def _run(self,data,prevNode):
+        condition_1 = data[self.inputs[1]['paramRef'][0]]
+        condition_2 = data[self.inputs[2]['paramRef'][0]]
+        data[self.name+'$1'] = (condition_1 or condition_2)
+
+class NotNode(BaseNode):
+    def _run(self,data,prevNode):
+        print("?")
+        inputCondition = data[self.inputs[1]['paramRef'][0]]
+        print("?")
+        data[self.name+'$1'] = (not inputCondition)
+        print("?")
+
+class BarrierNode(BaseNode):
+    def __init__(self, graph_node):
+        super().__init__(graph_node)
+        # 创建记录前驱用的map
+        self.prevNotDone = set()
+        for prev in self.inputs[0]['paramRef']:
+            self.prevNotDone.add(str(prev).partition('$')[0])
+
+    def _post(self,data,prevNode):
+        if prevNode.name in self.prevNotDone:
+            self.prevNotDone.remove(prevNode.name)
+        if not self.prevNotDone:
+            return super()._post(data,prevNode)
+        else:
+            return []
+
 
 class NodeFactory:
     @staticmethod
@@ -269,6 +336,22 @@ class NodeFactory:
             return WebSocketNode(graph_node=graph_node)
         elif graph_node['typeName']==IfNode.__name__:
             return IfNode(graph_node=graph_node)
+        elif graph_node['typeName']==AddMinusNode.__name__:
+            return AddMinusNode(graph_node=graph_node)
+        elif graph_node['typeName']==MultiDivNode.__name__:
+            return MultiDivNode(graph_node=graph_node)
+        elif graph_node['typeName']==BiggerNode.__name__:
+            return BiggerNode(graph_node=graph_node)
+        elif graph_node['typeName']==EqualNode.__name__:
+            return EqualNode(graph_node=graph_node)
+        elif graph_node['typeName']==AndNode.__name__:
+            return AndNode(graph_node=graph_node)
+        elif graph_node['typeName']==OrNode.__name__:
+            return OrNode(graph_node=graph_node)
+        elif graph_node['typeName']==NotNode.__name__:
+            return NotNode(graph_node=graph_node)
+        elif graph_node['typeName']==BarrierNode.__name__:
+            return BarrierNode(graph_node=graph_node)
         else:
             print('unsupport node: {},pass'.format(graph_node['typeName']))
             raise TestIncompatibleError(msg='unsupport node: {}'.format(graph_node['typeName']))
@@ -280,20 +363,22 @@ class TestGraph:
         self.startName=startName
         self.endName=endName
         self.runQueue = Queue()
+        # 上一个调度执行的节点
         self.lastRunNode = None
     
     def run(self):
         # 传递变量区
-        self.runQueue.put(self.nodes[self.startName])
+        # runQueue内容tuple，分别是节点前驱和后继
+        self.runQueue.put((None,self.nodes[self.startName]))
         a=time.time()
         Tools.log(self.global_data,'begin running')
         while not self.runQueue.empty():
-            currentNode = self.runQueue.get()
-            print(currentNode.name +' running')
-            nextNodes = currentNode.doRun(self.global_data)
+            (prevNode,currentNode) = self.runQueue.get()
+            print('{} running'.format(currentNode.name))
+            nextNodes = currentNode.doRun(self.global_data,prevNode)
             print('next: {}'.format(nextNodes))
             for node in nextNodes:
-                self.runQueue.put(self.nodes[node])
+                self.runQueue.put((currentNode,self.nodes[node]))
             self.lastRunNode = currentNode
         Tools.log(self.global_data,'end running')
         b=time.time()

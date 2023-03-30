@@ -16,7 +16,7 @@ export interface Type<T = any> extends Function {
 export class BaseParam {
     paramName: string;
     readonly paramType: ParamRuntimeTypeEnums;
-    paramValue: Array<string>;
+    paramValue: string;
     paramRef: Array<string>
     readonly typeName:string;
     readonly categoryNames: Array<ParamCategoryEnums>;
@@ -26,7 +26,7 @@ export class BaseParam {
         ,paramName:string
         ,paramType:ParamRuntimeTypeEnums
         ,paramRef:Array<string>
-        ,paramValue:Array<string>) {
+        ,paramValue:string) {
         this.paramName=paramName;
         this.paramType=paramType;
         this.paramValue=paramValue;
@@ -49,7 +49,7 @@ export class BaseParam {
 export interface ParamBuilder {
     readonly typeName: string;
     readonly categoryNames: Array<ParamCategoryEnums>;
-    build(paramName:string,paramType:ParamRuntimeTypeEnums,paramRef:Array<string>,paramvalue:Array<string>):BaseParam;
+    build(paramName:string,paramType:ParamRuntimeTypeEnums,paramRef:Array<string>,paramValue:string):BaseParam;
 }
 
 // 参数值内容永远是string存储
@@ -83,7 +83,7 @@ export class FlowParam {
     static build(paramName:string
         ,paramType:ParamRuntimeTypeEnums
         ,paramRef:Array<string>
-        ,paramValue:Array<string>):BaseParam {
+        ,paramValue:string):BaseParam {
         return new BaseParam(FlowParam.typeName
             ,FlowParam.categoryNames
             ,paramName
@@ -99,7 +99,7 @@ export class VariableParam {
     static build(paramName:string
         ,paramType:ParamRuntimeTypeEnums
         ,paramRef:Array<string>
-        ,paramValue:Array<string>):BaseParam {
+        ,paramValue:string):BaseParam {
         return new BaseParam(VariableParam.typeName
             ,VariableParam.categoryNames
             ,paramName
@@ -115,7 +115,7 @@ export class ConstantParam {
     static build(paramName:string
         ,paramType:ParamRuntimeTypeEnums
         ,paramRef:Array<string>
-        ,paramValue:Array<string>):BaseParam {
+        ,paramValue:string):BaseParam {
         return new BaseParam(ConstantParam.typeName
             ,ConstantParam.categoryNames
             ,paramName
@@ -159,7 +159,7 @@ export class InOutParams {
             ,paramName:string
             ,paramType:ParamRuntimeTypeEnums=ParamRuntimeTypeEnums.VarNameValue
             ,paramRef:Array<string>=[]
-            ,paramValue:Array<string>=[]): InOutParams {
+            ,paramValue:string=''): InOutParams {
         if(this.paramNameSet.has(paramName))
             throw Error('param name duplicate');
         this.paramNameSet.add(paramName);
@@ -688,9 +688,8 @@ export class AddMinusNode {
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
         inputs.addParam(FlowParam,"prev")
-            .addParam(VariableParam,"data_1")
-            .addParam(VariableParam,"data_2")
-            .addParam(VariableParam,"data_3");
+            .addParam(VariableParam,"data_plus")
+            .addParam(VariableParam,"data_minus");
         const outputs = new InOutParams();
         outputs.addParam(FlowParam,"next")
             .addParam(VariableParam,"data");
@@ -699,7 +698,7 @@ export class AddMinusNode {
             ,outputs
             ,pos_x
             ,pos_y
-            ,SwitchNode.typeName
+            ,AddMinusNode.typeName
             ,{}
             ,nodeName);
         return temp;
@@ -713,9 +712,8 @@ export class MultiDivNode {
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
         inputs.addParam(FlowParam,"prev")
-            .addParam(VariableParam,"data_1")
-            .addParam(VariableParam,"data_2")
-            .addParam(VariableParam,"data_3");
+            .addParam(VariableParam,"data_mul")
+            .addParam(VariableParam,"data_div");
         const outputs = new InOutParams();
         outputs.addParam(FlowParam,"next")
             .addParam(VariableParam,"data");
@@ -834,10 +832,10 @@ export class NotNode {
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
         inputs.addParam(FlowParam,"prev")
-            .addParam(VariableParam,"data");
+            .addParam(VariableParam,"condition");
         const outputs = new InOutParams();
         outputs.addParam(FlowParam,"next")
-            .addParam(VariableParam,"data");
+            .addParam(VariableParam,"condition");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
