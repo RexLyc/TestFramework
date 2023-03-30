@@ -1,4 +1,4 @@
-from graph.Component import TestGraphFactory,TestRunError,IncompatibleError,RunResult
+from graph.Component import TestGraphFactory,TestError,TestRuntimeError,TestIncompatibleError,RunResult
 from enum import Enum
 
 class CommonResponse(dict):
@@ -20,9 +20,9 @@ class TestService:
         try:
             graph = TestGraphFactory.buildGraph(jsonGraph)
             return CommonResponse(CommonResponseEnum.SUCCESS.value,graph.run())
-        except IncompatibleError as err:
+        except TestIncompatibleError as err:
             return CommonResponse(CommonResponseEnum.INCOMPATIBLE.value,RunResult(0,'{}'.format(err)))
-        except (TestRunError, Exception) as err:
+        except (TestRuntimeError, TestError, Exception) as err:
             return CommonResponse(CommonResponseEnum.EXCEPTION.value,RunResult(0,'{}'.format(err)))
 
     @staticmethod

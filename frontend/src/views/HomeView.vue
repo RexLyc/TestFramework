@@ -5,6 +5,7 @@ import TestNodeMenu from '../components/TestNodeMenu.vue'
 import {usePressElementStore} from '@/stores/counter'
 import * as tn from '@/TestNode';
 import {ref, onMounted } from 'vue';
+import type { ElementNode } from '@vue/compiler-core';
 
 
 
@@ -33,8 +34,10 @@ document.onmousedown=(event:MouseEvent)=>{
 document.onmouseup=(event)=>{
   if(event.button==2) // 不处理右键
     return true;
-  if(beginPressed.value==true&&beginDrag.value==true){
-    //
+  if(beginPressed.value==true&&beginDrag.value==true&&
+    // 需要落入绘制区
+    ((event.target as Element).classList.contains('drawflow')
+      ||(event.target as Element).id==='drawflow')){
     // console.log('create node: ',beginPressed,beginDrag);
     newNode.value=pressedElementStore.currentPressedElement.id;
     posX.value=event.x;
@@ -62,8 +65,9 @@ document.onmousemove=(event)=>{
       pressedElementStore.currentPressedElement.appendChild(dragDiv.value);
       // console.log('create div: %o %o',pressedElementStore.currentPressedElement.innerHTML,dragDiv.value);
     }
-    dragDiv.value.style.top=event.clientY+'px';
-    dragDiv.value.style.left=event.clientX+'px';
+    // +10 挪开一点距离，避免影响mouseup时所在区域的判断
+    dragDiv.value.style.top=event.clientY+10+'px';
+    dragDiv.value.style.left=event.clientX+10+'px';
   }
   // return false; //避免选中文本
 }

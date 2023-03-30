@@ -14,6 +14,7 @@ import * as tn from  '@/TestNode'
 import { ref } from 'vue'
 
 const detailDrawler = ref(false)
+const graphExportDrawler = ref(false)
 
 let editor: Drawflow;
 let graph:tn.TestGraph;
@@ -35,6 +36,8 @@ const props = defineProps({
   pos_y:Number
 })
 
+// 导入时，应当屏蔽绘制事件（避免重复添加连接）
+const shieldDrawEvent = ref(false);
 
 watch(props,()=>{
   // 需要计算canvas 左上角、transform、scale
@@ -137,6 +140,9 @@ onMounted(()=>{
   });
 
   editor.on('connectionCreated',(detail:any)=>{
+    if(shieldDrawEvent.value){
+      return;
+    }
     removeAllClass('incompatible_param');
     // 更新数据节点
     graph.addConnection(drawDataIdMap.get(detail.output_id)!
@@ -150,21 +156,17 @@ onMounted(()=>{
   })
 
   editor.on('connectionRemoved',(detail:any)=>{
-    console.log('connection %o removing',detail);
     graph.removeConnection(drawDataIdMap.get(detail.output_id)!
       ,detail.output_class.slice(7)-1
       ,drawDataIdMap.get(detail.input_id)!
       ,detail.input_class.slice(6)-1);
-    console.log('connection %o removed',detail);
   });
 
   editor.on('nodeRemoved',(id:string)=>{
-    console.log('node %o removing',id);
     const dataId = drawDataIdMap.get(id)!;
     drawDataIdMap.delete(id);
     graph.removeNode(dataId);
     dataDrawIdMap.delete(dataId);
-    console.log('node %o removed',id);
   })
 
   editor.on('nodeMoved',(id:string)=>{
@@ -254,9 +256,8 @@ const initConnections = ()=>{
 //TODO: 导出测试图
 const exportGraph = ()=>{
   var exportJson = tn.TestGraphFactory.exportGraph(graph.graphName);
-  // console.log(exportJson)
   outputData.value=exportJson;
-  detailDrawler.value=true;
+  graphExportDrawler.value=true;
   download('test.json',exportJson);
 }
 
@@ -271,17 +272,19 @@ const importGraph = (event:any)=>{
 }
 
 const cleanAndDraw = (event:any)=>{
+  
   dialogVisible.value=false;
   // 清空当前
   clearAll();
   tn.TestGraphFactory.removeTestGraph(graph.graphName);
   tn.TestGraphFactory.addTestGraph(waitGraph.value);
   graph = waitGraph.value;
-  console.log(graph);
+  shieldDrawEvent.value=true;
   // 绘制节点
   initNode();
   // 绘制连接
   initConnections();
+  shieldDrawEvent.value=false;
 }
 
 const resetView=()=>{
@@ -328,6 +331,14 @@ function download(filename:string, content:string) {
         <el-scrollbar>
           <div id="drawDiv">
             <NodeDetail :graph-name="detailGraphName" :node-name="detailNodeName"/>
+            <el-text class="mx-1" size="large">{{ outputData }}</el-text>
+          </div>
+        </el-scrollbar>
+      </el-drawer>
+
+      <el-drawer v-model="graphExportDrawler" title="测试图导出" margin="0" padding="0">
+        <el-scrollbar>
+          <div id="drawDiv">
             <el-text class="mx-1" size="large">{{ outputData }}</el-text>
           </div>
         </el-scrollbar>

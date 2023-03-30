@@ -66,6 +66,8 @@ export enum ParamRuntimeTypeEnums {
     FloatValue      = "FloatValue",
     // 参数值是python脚本
     PythonValue     = "PythonValue",
+    // 参数值是bool类型值
+    BoolValue       = "BoolValue",
 }
 
 // 分组用于表明是否可以连接
@@ -162,6 +164,7 @@ export class InOutParams {
             throw Error('param name duplicate');
         this.paramNameSet.add(paramName);
         if(typeof paramBuilder ==='string') {
+
             this.params.push(ParamLibrary.getBuilder(paramBuilder)?.build(paramName,paramType,paramRef,paramValue)!);
         }
         else{
@@ -241,10 +244,8 @@ export class TestGraph {
     static fromJSON(jsonObject:any):TestGraph{
         const graph = new TestGraph(jsonObject.graphName);
         graph.nameCountMap=new Map(jsonObject.nameCountMap);
-        console.log('nameNodeMap: %o',jsonObject.nameNodeMap)
         const tempNameNodeMap = new Map(jsonObject.nameNodeMap);
         for(let node of tempNameNodeMap.entries()){
-            console.log(node[1]);
             graph.nameNodeMap.set(node[0] as string,BaseNode.fromJSON(node[1]));
         }
         return graph;
@@ -290,7 +291,6 @@ export class BaseNode {
     }
 
     static fromJSON(jsonObject:any):BaseNode{
-        console.log('BaseNode: %o',jsonObject.inputs)
         return new BaseNode(jsonObject.name
             ,InOutParams.fromJSON(jsonObject.inputs)
             ,InOutParams.fromJSON(jsonObject.outputs)
@@ -316,7 +316,7 @@ export enum CategoryEnums {
     WebType = "WebType",                // 网络测试节点
     SerialType = "SerialType",          // 串口测试节点
     FlowType = "FlowType",              // 流程控制节点
-    MathType = "MathType",              // 数理运算节点
+    CalculateType = "CalculateType",              // 数理运算节点
 }
 
 
@@ -502,7 +502,6 @@ export class RecvNode {
         const inputs = new InOutParams();
         inputs.addParam(FlowParam,"prev")
             .addParam(VariableParam,"file")
-            .addParam(VariableParam,"data")
             .addParam(VariableParam,"timeout");
         const outputs = new InOutParams();
         outputs.addParam(FlowParam,"next")
@@ -526,10 +525,11 @@ export class HttpNode {
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
         inputs.addParam(FlowParam,"prev")
-            .addParam(VariableParam,"data");
+            .addParam(VariableParam,"url")
+            .addParam(VariableParam,"method");
         const outputs = new InOutParams();
         outputs.addParam(FlowParam,"next")
-            .addParam(VariableParam,"data");
+            .addParam(VariableParam,"httpFile");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -549,10 +549,11 @@ export class TCPNode {
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
         inputs.addParam(FlowParam,"prev")
-            .addParam(VariableParam,"data");
+            .addParam(VariableParam,"addr")
+            .addParam(VariableParam,"port");
         const outputs = new InOutParams();
         outputs.addParam(FlowParam,"next")
-            .addParam(VariableParam,"data");
+            .addParam(VariableParam,"tcpFile");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -572,10 +573,10 @@ export class UDPNode {
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
         inputs.addParam(FlowParam,"prev")
-            .addParam(VariableParam,"data");
+            .addParam(VariableParam,"addr");
         const outputs = new InOutParams();
         outputs.addParam(FlowParam,"next")
-            .addParam(VariableParam,"data");
+            .addParam(VariableParam,"udpFile");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -595,10 +596,10 @@ export class WebSocketNode {
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
         inputs.addParam(FlowParam,"prev")
-            .addParam(VariableParam,"data");
+            .addParam(VariableParam,"url");
         const outputs = new InOutParams();
         outputs.addParam(FlowParam,"next")
-            .addParam(VariableParam,"data");
+            .addParam(VariableParam,"wsFile");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -622,7 +623,7 @@ export class SerialNode {
             .addParam(VariableParam,"port");
         const outputs = new InOutParams();
         outputs.addParam(FlowParam,"next")
-            .addParam(VariableParam,"data");
+            .addParam(VariableParam,"serialFile");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -642,10 +643,10 @@ export class IfNode {
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const inputs = new InOutParams();
         inputs.addParam(FlowParam,"prev")
-            .addParam(VariableParam,"data");
+            .addParam(VariableParam,"condition");
         const outputs = new InOutParams();
-        outputs.addParam(FlowParam,"next")
-            .addParam(VariableParam,"data");
+        outputs.addParam(FlowParam,"trueNext")
+            .addParam(FlowParam,"falseNext");
         const temp = new BaseNode(nodeName
             ,inputs
             ,outputs
@@ -667,6 +668,30 @@ export class SwitchNode {
         inputs.addParam(FlowParam,"prev")
             .addParam(VariableParam,"data");
         const outputs = new InOutParams();
+        outputs.addParam(FlowParam,"defaultNext");
+        const temp = new BaseNode(nodeName
+            ,inputs
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,SwitchNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
+
+// 加减法：1 + 2 - 3，默认值 0
+export class AddMinusNode {
+    static categoryName = CategoryEnums.CalculateType;
+    static typeName = "AddMinusNode";
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"data_1")
+            .addParam(VariableParam,"data_2")
+            .addParam(VariableParam,"data_3");
+        const outputs = new InOutParams();
         outputs.addParam(FlowParam,"next")
             .addParam(VariableParam,"data");
         const temp = new BaseNode(nodeName
@@ -681,7 +706,170 @@ export class SwitchNode {
     }
 }
 
+// 乘除法： 1 * 2 / 3，默认值 1
+export class MultiDivNode {
+    static categoryName = CategoryEnums.CalculateType;
+    static typeName = "MultiDivNode";
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"data_1")
+            .addParam(VariableParam,"data_2")
+            .addParam(VariableParam,"data_3");
+        const outputs = new InOutParams();
+        outputs.addParam(FlowParam,"next")
+            .addParam(VariableParam,"data");
+        const temp = new BaseNode(nodeName
+            ,inputs
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,MultiDivNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
 
+// 是否大于的判断
+export class BiggerNode {
+    static categoryName = CategoryEnums.CalculateType;
+    static typeName = "BiggerNode";
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"data_1")
+            .addParam(VariableParam,"data_2");
+        const outputs = new InOutParams();
+        outputs.addParam(FlowParam,"next")
+            .addParam(VariableParam,"condition");
+        const temp = new BaseNode(nodeName
+            ,inputs
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,BiggerNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
+
+// 是否相等的判断
+export class EqualNode {
+    static categoryName = CategoryEnums.CalculateType;
+    static typeName = "EqualNode";
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"data_1")
+            .addParam(VariableParam,"data_2");
+        const outputs = new InOutParams();
+        outputs.addParam(FlowParam,"next")
+            .addParam(VariableParam,"condition");
+        const temp = new BaseNode(nodeName
+            ,inputs
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,EqualNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
+
+// 逻辑与
+export class AndNode {
+    static categoryName = CategoryEnums.CalculateType;
+    static typeName = "AndNode";
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"condition_1")
+            .addParam(VariableParam,"condition_2");
+        const outputs = new InOutParams();
+        outputs.addParam(FlowParam,"next")
+            .addParam(VariableParam,"condition");
+        const temp = new BaseNode(nodeName
+            ,inputs
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,AndNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
+
+// 逻辑或
+export class OrNode {
+    static categoryName = CategoryEnums.CalculateType;
+    static typeName = "OrNode";
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"condition_1")
+            .addParam(VariableParam,"condition_2");
+        const outputs = new InOutParams();
+        outputs.addParam(FlowParam,"next")
+            .addParam(VariableParam,"condition");
+        const temp = new BaseNode(nodeName
+            ,inputs
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,OrNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
+
+// 逻辑非
+export class NotNode {
+    static categoryName = CategoryEnums.CalculateType;
+    static typeName = "NotNode";
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"data");
+        const outputs = new InOutParams();
+        outputs.addParam(FlowParam,"next")
+            .addParam(VariableParam,"data");
+        const temp = new BaseNode(nodeName
+            ,inputs
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,NotNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
+
+// 栅栏节点，用于等待所有prev
+export class BarrierNode {
+    static categoryName = CategoryEnums.FlowType;
+    static typeName = "BarrierNode";
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(FlowParam,"prev");
+        const outputs = new InOutParams();
+        outputs.addParam(FlowParam,"next");
+        const temp = new BaseNode(nodeName
+            ,inputs
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,BarrierNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
 
 // ====================== 实用工具 ====================== 
 // 默认翻译
@@ -708,6 +896,7 @@ basicParamTranslator.set(ParamRuntimeTypeEnums.StringValue,'字符串字面值')
 basicParamTranslator.set(ParamRuntimeTypeEnums.IntegerValue,'整型数字面值');
 basicParamTranslator.set(ParamRuntimeTypeEnums.FloatValue,'浮点数字面值');
 basicParamTranslator.set(ParamRuntimeTypeEnums.PythonValue,'Python脚本')
+basicParamTranslator.set(ParamRuntimeTypeEnums.BoolValue,'逻辑真值Bool')
 
 
 export class ParamTranslator {
@@ -842,9 +1031,7 @@ export class ImportExportProtocol {
     */
     static version:number=1;
     static importGraph(graphJson:string):TestGraph{
-        console.log('origin: %o',graphJson);
         const jsonObject = JSON.parse(graphJson);
-        console.log('object: %o',jsonObject);
         if(jsonObject.meta.version > this.version){
             throw Error("incompable data version");
         }
@@ -866,12 +1053,14 @@ basicNodeTranslate.set("CommonType","通用节点");
 basicNodeTranslate.set("WebType","网络测试节点");
 basicNodeTranslate.set("SerialType","串口测试节点");
 basicNodeTranslate.set("FlowType","流程控制节点");
+basicNodeTranslate.set("CalculateType","数理逻辑运算节点");
 
 basicNodeTranslate.set("BeginNode","测试起始节点");
 basicNodeTranslate.set("EndNode","测试终止节点");
 basicNodeTranslate.set("LogNode","日志节点");
 basicNodeTranslate.set("ExtractNode","数据提取节点");
 basicNodeTranslate.set("MergeNode","数据合并节点");
+
 basicNodeTranslate.set("GlobalNode","全局配置节点");
 basicNodeTranslate.set("SendNode","数据发送节点");
 basicNodeTranslate.set("RecvNode","数据接收节点");
@@ -883,23 +1072,43 @@ basicNodeTranslate.set("SerialNode","串口连接节点");
 basicNodeTranslate.set("IfNode","条件跳转节点");
 basicNodeTranslate.set("SwitchNode","Switch跳转节点");
 basicNodeTranslate.set("ConstantNode","常量节点");
+
+// 运算节点
 basicNodeTranslate.set("AddMinusNode","加减法节点");
 basicNodeTranslate.set("MultiDivNode","乘除法节点");
-basicNodeTranslate.set("AddNode","加法节点");
+basicNodeTranslate.set("BiggerNode","大于节点");
+basicNodeTranslate.set("EqualNode","等于节点");
+basicNodeTranslate.set("AndNode","逻辑与节点");
+basicNodeTranslate.set("OrNode","逻辑或节点");
+basicNodeTranslate.set("NotNode","逻辑非节点");
 
-NodeFactory.loadNodeLibrary(BeginNode)
-NodeFactory.loadNodeLibrary(EndNode)
-NodeFactory.loadNodeLibrary(LogNode)
-NodeFactory.loadNodeLibrary(ExtractNode)
-NodeFactory.loadNodeLibrary(MergeNode)
-NodeFactory.loadNodeLibrary(GlobalNode)
-NodeFactory.loadNodeLibrary(SendNode)
-NodeFactory.loadNodeLibrary(RecvNode)
-NodeFactory.loadNodeLibrary(HttpNode)
-NodeFactory.loadNodeLibrary(TCPNode)
-NodeFactory.loadNodeLibrary(UDPNode)
-NodeFactory.loadNodeLibrary(WebSocketNode)
-NodeFactory.loadNodeLibrary(SerialNode)
-NodeFactory.loadNodeLibrary(IfNode)
-NodeFactory.loadNodeLibrary(SwitchNode)
+// 其他流程控制
+basicNodeTranslate.set("BarrierNode","栅栏节点")
+
+
+NodeFactory.loadNodeLibrary(BeginNode);
+NodeFactory.loadNodeLibrary(EndNode);
+NodeFactory.loadNodeLibrary(LogNode);
+NodeFactory.loadNodeLibrary(ExtractNode);
+NodeFactory.loadNodeLibrary(MergeNode);
+// 暂时废弃
+// NodeFactory.loadNodeLibrary(GlobalNode)
+NodeFactory.loadNodeLibrary(SendNode);
+NodeFactory.loadNodeLibrary(RecvNode);
+NodeFactory.loadNodeLibrary(HttpNode);
+NodeFactory.loadNodeLibrary(TCPNode);
+// 暂不实装
+// NodeFactory.loadNodeLibrary(UDPNode)
+NodeFactory.loadNodeLibrary(WebSocketNode);
+NodeFactory.loadNodeLibrary(SerialNode);
+NodeFactory.loadNodeLibrary(IfNode);
+NodeFactory.loadNodeLibrary(SwitchNode);
 NodeFactory.loadNodeLibrary(ConstantNode);
+NodeFactory.loadNodeLibrary(AddMinusNode)
+NodeFactory.loadNodeLibrary(MultiDivNode);
+NodeFactory.loadNodeLibrary(BiggerNode);
+NodeFactory.loadNodeLibrary(EqualNode);
+NodeFactory.loadNodeLibrary(AndNode);
+NodeFactory.loadNodeLibrary(OrNode);
+NodeFactory.loadNodeLibrary(NotNode);
+NodeFactory.loadNodeLibrary(BarrierNode);

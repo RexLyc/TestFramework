@@ -3,21 +3,102 @@ import time
 import requests
 from queue import Queue
 from enum import Enum
+import socket
+import asyncio
+import websockets
 
+# ================= 运行结果、错误 ================= 
 class RunResult(dict):
     def __init__(self,timeElapsed,log):
         self.timeElapsed=timeElapsed
         self.log=log
         dict.__init__(self,timeElapsed=timeElapsed,log=log)
 
-class TestRunError(RuntimeError):
-    def __init__(self,msg):
+class TestError(RuntimeError):
+    def __init__(self,nodeName='global',msg='error'):
+        self.nodeName=nodeName
         self.msg=msg
+    
+    def __format__(self, __format_spec: str) -> str:
+        return 'at {}, {}'.format(self.nodeName,self.msg)
 
-class IncompatibleError(RuntimeError):
-    def __init__(self,msg):
-        self.msg=msg
+class TestRuntimeError(TestError):
+    pass
 
+class TestIncompatibleError(TestError):
+    pass
+
+
+# ================= 工具 =================
+class Tools:
+    @staticmethod
+    def getParamType(typeName):
+        if typeName == 'VarNameValue' or typeName == 'StringValue':
+            return str
+        elif typeName == 'IntegerValue':
+            return int
+        elif typeName == 'FloatValue':
+            return float
+        elif typeName == 'BoolValue':
+            return bool
+        else:
+            return None
+    
+    @staticmethod
+    def log(global_data,logData,loggerName='Default'):
+        print('logging {}'.format(logData))
+        if '$$log' not in global_data:
+            global_data['$$log'] = ''
+        global_data['$$log'] = global_data['$$log'] + '{} - {}: {}\n'.format(time.time(),loggerName,logData)
+
+    @staticmethod
+    def createTcpFile(addr,port):
+        s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        s.connect((addr,port))
+        return s
+    
+    @staticmethod
+    async def createWebsocketFile(url):
+        try:
+            websocket = await websockets.connect(url)
+        except ConnectionRefusedError as e:
+            print('ws refuse {}'.format(e))
+        return websocket
+
+    @staticmethod
+    async def recvWebsocket(websocket,timeout):
+        try:
+            return await asyncio.wait_for(websocket.recv(),timeout)
+        except asyncio.TimeoutError as err:
+            print('websocket recv timeout: {}'.format(err))
+
+    @staticmethod
+    async def sendWebsocket(websocket,dataBody,timeout):
+        try:
+            return await asyncio.wait_for(websocket.send(dataBody),timeout)
+        except asyncio.TimeoutError as err:
+            print('websocket send timeout: {}'.format(err))
+
+# ================= IO参数 抽象 ================= 
+class File:
+    def __init__(self,file):
+        self.file=file
+
+class HttpFile(File):
+    def __init__(self,url,method):
+        super().__init__(None)
+        self.url=url
+        self.method=method
+
+class TcpFile(File):
+    pass
+
+class WebsocketFile(File):
+    pass
+
+
+
+# ================= 运行节点 =================
 class BaseNode:
     def __init__(self, graph_node):
         self.name=graph_node['name']
@@ -30,6 +111,9 @@ class BaseNode:
         return 'Type: {}, Id: {}'.format(self.__class__, self.name)
 
     def _run(self,data=None):
+        pass
+
+    def _post(self,data=None):
         next = []
         for nextNode in self.outputs[0]['paramRef']:
             next.append(str(nextNode).partition('$')[0])
@@ -37,55 +121,38 @@ class BaseNode:
 
     # 执行运算，并返回下一个运行的节点
     def doRun(self,data):
-        return self._run(data)
-
-class Tools:
-    @staticmethod
-    def getParamType(typeName):
-        if typeName == 'VarNameValue' or typeName == 'StringValue':
-            return str
-        elif typeName == 'IntegerValue':
-            return int
-        elif typeName == 'FloatValue':
-            return float
-        elif typeName == 'PythonValue':
-            raise IncompatibleError('unsupport paramRuntimeType')
-    
-    @staticmethod
-    def log(global_data,logData,loggerName='Default'):
-        print('logging {}'.format(logData))
-        if '$$log' not in global_data:
-            global_data['$$log'] = ''
-        global_data['$$log'] = global_data['$$log'] + '{} - {}: {}\n'.format(time.time(),loggerName,logData)
-        
+        try:
+            self._run(data)
+            return self._post(data)
+        except TestError as err:
+            raise err
+        except Exception as err:
+            raise TestRuntimeError(self.name,'{}'.format(err))
 
 class BeginNode(BaseNode):
     pass
 
-
 class ConstantNode(BaseNode):
     def _run(self,data):
         for i in range(0,len(self.outputs)):
-            type = Tools.getParamType(self.outputs[i]['paramType'])
-            print('constant setting' + str(type(self.outputs[i]['paramValue'])))
-            data[self.name+'$'+str(i)] = type(self.outputs[i]['paramValue'])
+            runType = Tools.getParamType(self.outputs[i]['paramType'])
+            if runType == None:
+                raise TestRuntimeError(self.name,'unsupported runType: {}'.format(self.outputs[i]['paramType']))
+            elif runType == bool:
+                # bool 类型比较特殊, bool("0")为false，需要先转一下
+                self.outputs[i]['paramValue']=int(self.outputs[i]['paramValue'])
+            print('constant setting: {} {} '.format(self.outputs[i]['paramValue'],runType(self.outputs[i]['paramValue'])))
+            data[self.name+'$'+str(i)] = runType(self.outputs[i]['paramValue'])
 
 class EndNode(BaseNode):
-    def _run(self,data):
+    def _post(self,data):
         return []
-
-class File:
-    def __init__(self,file):
-        self.file=file
-
-class HttpFile(File):
-    pass
 
 class HttpNode(BaseNode):
     def _run(self,data):
         url = data[self.inputs[1]['paramRef'][0]]
-        data[self.name+'$1']=HttpFile(url)
-        return super()._run()
+        method = data[self.inputs[2]['paramRef'][0]]
+        data[self.name+'$1']=HttpFile(url,method)
 
 class SendNode(BaseNode):
     def _run(self,data):
@@ -93,18 +160,87 @@ class SendNode(BaseNode):
         dataBody = data[self.inputs[2]['paramRef'][0]]
         timeout = data[self.inputs[3]['paramRef'][0]]
         result = ''
+        dataBody = '{}'.format(dataBody).encode()
         if isinstance(file,HttpFile):
-            result = requests.post(file.file,data=dataBody,timeout=timeout).content
+            resp = requests.request(method=file.method,url=file.url,data=dataBody,timeout=timeout)
+            if not resp.ok:
+                raise TestRuntimeError(self.name,'http send failed: {}'.format(resp.content))
+            result = resp.content
+        elif isinstance(file,TcpFile):
+            file.file.settimeout(timeout)
+            result = file.file.send(dataBody)
+        elif isinstance(file,WebsocketFile):
+            result = asyncio.get_event_loop().run_until_complete(Tools.sendWebsocket(file.file,dataBody,timeout))
         else:
-            raise TestRunError('unsupport SendNode file')
+            raise TestRuntimeError(self.name,'unsupport SendNode file')
         data[self.name+'$1']=result
-        return super()._run()
 
 class LogNode(BaseNode):
     def _run(self,data):
         logData = data[self.inputs[1]['paramRef'][0]]
         Tools.log(data,logData,self.name)
-        return super()._run()
+
+class ExtractNode(BaseNode):
+    def _run(self,data):
+        inputData = data[self.inputs[1]['paramRef'][0]]
+        outputData = outputData = inputData[data[self.inputs[2]['paramRef'][0]]:data[self.inputs[3]['paramRef'][0]]]
+        data[self.name+'$1']=outputData
+
+class MergeNode(BaseNode):
+    def _run(self,data):
+        data_1 = data[self.inputs[1]['paramRef'][0]]
+        data_2 = data[self.inputs[2]['paramRef'][0]]
+        outputData = data_1 + data_2
+        data[self.name+'$1']=outputData
+
+class TCPNode(BaseNode):
+    def _run(self,data):
+        addr = data[self.inputs[1]['paramRef'][0]]
+        port = data[self.inputs[2]['paramRef'][0]]
+        tcpFile = TcpFile(Tools.createTcpFile(addr,port))
+        data[self.name+'$1'] = tcpFile
+
+class RecvNode(BaseNode):
+    def _run(self,data):
+        file = data[self.inputs[1]['paramRef'][0]]
+        timeout = data[self.inputs[2]['paramRef'][0]] / 1000.0
+        outputData = None
+        if isinstance(file,HttpFile):
+            pass
+        elif isinstance(file,TcpFile):
+            file.file.settimeout(min(timeout,10))
+            try:
+                outputData = file.file.recv(4096)
+            except socket.timeout as err:
+                print('timeout')
+        elif isinstance(file,WebsocketFile):
+            outputData = asyncio.get_event_loop().run_until_complete(Tools.recvWebsocket(file.file,timeout))
+        else:
+            raise TestRuntimeError(self.name,'unsupport RecvNode file: {}'.format(file))
+        data[self.name+'$1'] = outputData
+
+class WebSocketNode(BaseNode):
+    def _run(self,data):
+        url = data[self.inputs[1]['paramRef'][0]]
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+        outputData = WebsocketFile(asyncio.get_event_loop().run_until_complete(Tools.createWebsocketFile(url)))
+        data[self.name+'$1'] = outputData
+
+class IfNode(BaseNode):
+    def _post(self,data):
+        condition = data[self.inputs[1]['paramRef'][0]]
+        print(condition)
+        next = []
+        if condition==True:
+            for nextNode in self.outputs[0]['paramRef']:
+                next.append(str(nextNode).partition('$')[0])
+        elif condition==False:
+            for nextNode in self.outputs[1]['paramRef']:
+                next.append(str(nextNode).partition('$')[0])
+        else:
+            raise TestRuntimeError(self.name,'invalid condition: {}'.format(condition))
+        return next
 
 class NodeFactory:
     @staticmethod
@@ -121,9 +257,21 @@ class NodeFactory:
             return SendNode(graph_node=graph_node)
         elif graph_node['typeName']==LogNode.__name__:
             return LogNode(graph_node=graph_node)
+        elif graph_node['typeName']==ExtractNode.__name__:
+            return ExtractNode(graph_node=graph_node)
+        elif graph_node['typeName']==MergeNode.__name__:
+            return MergeNode(graph_node=graph_node)
+        elif graph_node['typeName']==TCPNode.__name__:
+            return TCPNode(graph_node=graph_node)
+        elif graph_node['typeName']==RecvNode.__name__:
+            return RecvNode(graph_node=graph_node)
+        elif graph_node['typeName']==WebSocketNode.__name__:
+            return WebSocketNode(graph_node=graph_node)
+        elif graph_node['typeName']==IfNode.__name__:
+            return IfNode(graph_node=graph_node)
         else:
             print('unsupport node: {},pass'.format(graph_node['typeName']))
-            raise IncompatibleError('unsupport node: {},pass'.format(graph_node['typeName']))
+            raise TestIncompatibleError(msg='unsupport node: {}'.format(graph_node['typeName']))
 
 class TestGraph:
     def __init__(self,global_data,nodes,startName,endName):
@@ -152,7 +300,7 @@ class TestGraph:
         Tools.log(self.global_data,'time elapsed :{}'.format(b-a))
         if not isinstance(self.lastRunNode,EndNode):
             Tools.log(self.global_data,'Test ended at Non-EndNode')
-            raise TestRunError('Test ended at Non-EndNode')
+            raise TestRuntimeError(nodeName = self.lastRunNode.name,msg='Test ended at Non-EndNode')
         return RunResult(b-a,self.global_data['$$log'])
 
 class TestGraphFactory:

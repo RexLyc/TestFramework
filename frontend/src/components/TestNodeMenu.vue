@@ -35,7 +35,7 @@ onMounted(()=>{
 })
 
 function mousedown(event) {
-    pressedElementStore.setCurrent(event.srcElement);
+    pressedElementStore.setCurrent(event.target);
 }
 
 </script>
@@ -60,6 +60,7 @@ function mousedown(event) {
                     <el-icon v-else-if="item.index==tn.CategoryEnums.WebType"><MostlyCloudy/></el-icon>
                     <el-icon v-else-if="item.index==tn.CategoryEnums.FlowType"><Switch/></el-icon>
                     <el-icon v-else-if="item.index==tn.CategoryEnums.SerialType"><Link/></el-icon>
+                    <el-icon v-else-if="item.index==tn.CategoryEnums.CalculateType"><EditPen/></el-icon>
                     <span>{{tn.NodeTranslator.translate(item.index)}}</span>
                     <!-- <span>{{ item.index }}</span> -->
                 </template>
@@ -83,6 +84,15 @@ function mousedown(event) {
                         <el-icon v-else-if="item2.index==tn.SerialNode.typeName"><MagicStick /></el-icon>
                         <el-icon v-else-if="item2.index==tn.IfNode.typeName"><Guide /></el-icon>
                         <el-icon v-else-if="item2.index==tn.SwitchNode.typeName"><List /></el-icon>
+
+                        <el-icon v-else-if="item2.index==tn.AddMinusNode.typeName"><Plus /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.MultiDivNode.typeName"><Close /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.BiggerNode.typeName"><ArrowRight /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.EqualNode.typeName"><ScaleToOriginal /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.AndNode.typeName"><Finished /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.OrNode.typeName"><More /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.NotNode.typeName"><Warning /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.BarrierNode.typeName"><Aim /></el-icon>
                         <span :id="item2.index">{{tn.NodeTranslator.translate(item2.index)}}</span>
                         <!-- <span>{{ item2.index }}</span> -->
                     </el-menu-item>

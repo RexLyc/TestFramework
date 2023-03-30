@@ -52,7 +52,7 @@ const dataChanged = (event)=>{
       </el-form-item>
       -->
       <!-- ConstantNode专用，注意禁止引用类型参数 -->
-      <el-form-item label="输出参数" v-if="form.typeName==tn.ConstantNode.name">
+      <el-form-item label="输出参数" v-if="form.typeName && form.typeName==tn.ConstantNode.name">
         <el-table :data="form.outputs.params" style="width: 100%">
           <el-table-column label="参数名称">
             <template #default="scope">
