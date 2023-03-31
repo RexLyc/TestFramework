@@ -106,12 +106,23 @@ class BaseNode:
         self.outputs=graph_node['outputs']['params']
         self.typeName=graph_node['typeName']
         self.data=graph_node['data']
+        self.writeBackVar=dict()
+        # 统计所有待回写变量
+        for paramIndex in range(0,len(self.outputs)):
+            for outputVar in self.outputs[paramIndex]['paramRef']:
+                if str(outputVar).count(VariableNode.__name__)==1:
+                    self.writeBackVar[outputVar]='{}${}'.format(self.name,paramIndex)
+
 
     def __str__(self):
         return 'Type: {}, Id: {}'.format(self.__class__, self.name)
 
     def _run(self,data,prevNode):
         pass
+    
+    def _writeBack(self,data):
+        for (outputVar,param) in self.writeBackVar.items():
+            data[outputVar]=data[param]
 
     def _post(self,data,prevNode):
         next = []
@@ -123,6 +134,7 @@ class BaseNode:
     def doRun(self,data,prevNode=None):
         try:
             self._run(data,prevNode)
+            self._writeBack(data)
             return self._post(data,prevNode)
         except TestError as err:
             raise err
@@ -143,6 +155,9 @@ class ConstantNode(BaseNode):
                 self.outputs[i]['paramValue']=int(self.outputs[i]['paramValue'])
             print('constant setting: {} {} '.format(self.outputs[i]['paramValue'],runType(self.outputs[i]['paramValue'])))
             data[self.name+'$'+str(i)] = runType(self.outputs[i]['paramValue'])
+
+class VariableNode(ConstantNode):
+    pass
 
 class EndNode(BaseNode):
     def _post(self,data,prevNode):
@@ -295,7 +310,7 @@ class NotNode(BaseNode):
 class BarrierNode(BaseNode):
     def __init__(self, graph_node):
         super().__init__(graph_node)
-        # 创建记录前驱用的map
+        # 创建记录前驱用的set
         self.prevNotDone = set()
         for prev in self.inputs[0]['paramRef']:
             self.prevNotDone.add(str(prev).partition('$')[0])
@@ -352,6 +367,8 @@ class NodeFactory:
             return NotNode(graph_node=graph_node)
         elif graph_node['typeName']==BarrierNode.__name__:
             return BarrierNode(graph_node=graph_node)
+        elif graph_node['typeName']==VariableNode.__name__:
+            return VariableNode(graph_node=graph_node)
         else:
             print('unsupport node: {},pass'.format(graph_node['typeName']))
             raise TestIncompatibleError(msg='unsupport node: {}'.format(graph_node['typeName']))

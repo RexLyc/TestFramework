@@ -339,9 +339,31 @@ export class ConstantNode {
     }
 }
 
+
+// 变量
+export class VariableNode {
+    static categoryName = CategoryEnums.CommonType;
+    static typeName = "VariableNode";
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(VariableParam,"updateData",ParamRuntimeTypeEnums.VarNameValue);
+        const outputs = new InOutParams();
+        outputs.addParam(ConstantParam,"initData",ParamRuntimeTypeEnums.StringValue);
+        const temp = new BaseNode(nodeName
+            ,inputs
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,VariableNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
+
 // 测试起点
 export class BeginNode {
-    static categoryName = CategoryEnums.CommonType;
+    static categoryName = CategoryEnums.FlowType;
     static typeName = "BeginNode";
     static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
         const outputs = new InOutParams();
@@ -360,7 +382,7 @@ export class BeginNode {
 
 // 测试终点
 export class EndNode{
-    static categoryName = CategoryEnums.CommonType;
+    static categoryName = CategoryEnums.FlowType;
     static typeName = "EndNode";
     static build(nodeName:string, pos_x:number,pos_y:number):BaseNode {
         const inputs = new InOutParams();
@@ -1070,6 +1092,7 @@ basicNodeTranslate.set("SerialNode","串口连接节点");
 basicNodeTranslate.set("IfNode","条件跳转节点");
 basicNodeTranslate.set("SwitchNode","Switch跳转节点");
 basicNodeTranslate.set("ConstantNode","常量节点");
+basicNodeTranslate.set("VariableNode","变量节点");
 
 // 运算节点
 basicNodeTranslate.set("AddMinusNode","加减法节点");
@@ -1110,3 +1133,5 @@ NodeFactory.loadNodeLibrary(AndNode);
 NodeFactory.loadNodeLibrary(OrNode);
 NodeFactory.loadNodeLibrary(NotNode);
 NodeFactory.loadNodeLibrary(BarrierNode);
+
+NodeFactory.loadNodeLibrary(VariableNode);

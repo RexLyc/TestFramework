@@ -93,6 +93,7 @@ function mousedown(event) {
                         <el-icon v-else-if="item2.index==tn.OrNode.typeName"><More /></el-icon>
                         <el-icon v-else-if="item2.index==tn.NotNode.typeName"><Warning /></el-icon>
                         <el-icon v-else-if="item2.index==tn.BarrierNode.typeName"><Aim /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.VariableNode.typeName"><Flag /></el-icon>
                         <span :id="item2.index">{{tn.NodeTranslator.translate(item2.index)}}</span>
                         <!-- <span>{{ item2.index }}</span> -->
                     </el-menu-item>
