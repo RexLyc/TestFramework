@@ -149,10 +149,10 @@ ParamLibrary.addParamBuilder(ConstantParam);
 // 必须满足的InOut参数要求
 export class InOutParams {
     params: Array<BaseParam>;
-    paramNameSet: Set<String>;
+    paramNameIndexMap: Map<String,number>;
     constructor(){
         this.params=new Array();
-        this.paramNameSet=new Set();
+        this.paramNameIndexMap=new Map();
     }
 
     addParam(paramBuilder:ParamBuilder | string
@@ -160,9 +160,9 @@ export class InOutParams {
             ,paramType:ParamRuntimeTypeEnums=ParamRuntimeTypeEnums.VarNameValue
             ,paramRef:Array<string>=[]
             ,paramValue:string=''): InOutParams {
-        if(this.paramNameSet.has(paramName))
+        if(this.paramNameIndexMap.has(paramName))
             throw Error('param name duplicate');
-        this.paramNameSet.add(paramName);
+        this.paramNameIndexMap.set(paramName,this.params.length);
         if(typeof paramBuilder ==='string') {
 
             this.params.push(ParamLibrary.getBuilder(paramBuilder)?.build(paramName,paramType,paramRef,paramValue)!);
@@ -171,6 +171,21 @@ export class InOutParams {
             this.params.push(paramBuilder.build(paramName,paramType,paramRef,paramValue));
         }
         return this;
+    }
+
+    removeParam(paramName:string){
+        const index = this.paramNameIndexMap.get(paramName);
+        if(index!=undefined){
+            this.paramNameIndexMap.delete(paramName);
+            this.params.splice(index,1);
+        }
+    }
+
+    pop(){
+        if(this.params.length>0){
+            const paramName = this.params[this.params.length-1].paramName;
+            this.removeParam(paramName);
+        }
     }
 
     toJSON():object{

@@ -323,6 +323,21 @@ class BarrierNode(BaseNode):
         else:
             return []
 
+class SwitchNode(BaseNode):
+    def __genNext(self,output):
+        next = []
+        for nextNode in output['paramRef']:
+            next.append(str(nextNode).partition('$')[0])
+        return next
+
+    def _post(self,data,prevNode):
+        testData = data[self.inputs[1]['paramRef'][0]]
+        for i in range(2,len(self.inputs)):
+            print('{} {}'.format(2,len(self.inputs)))
+            if testData == data[self.inputs[i]['paramRef'][0]]:
+                return self.__genNext(self.outputs[i-1])
+        return self.__genNext(self.outputs[0])
+
 
 class NodeFactory:
     @staticmethod
@@ -369,6 +384,8 @@ class NodeFactory:
             return BarrierNode(graph_node=graph_node)
         elif graph_node['typeName']==VariableNode.__name__:
             return VariableNode(graph_node=graph_node)
+        elif graph_node['typeName']==SwitchNode.__name__:
+            return SwitchNode(graph_node=graph_node)
         else:
             print('unsupport node: {},pass'.format(graph_node['typeName']))
             raise TestIncompatibleError(msg='unsupport node: {}'.format(graph_node['typeName']))

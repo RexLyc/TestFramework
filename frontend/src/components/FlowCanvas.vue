@@ -182,7 +182,6 @@ onMounted(()=>{
   addEventListener('dataNodeChanged',dataNodeChanged);
   addEventListener('runTestGraph',runTestGraph);
 
-
   editor.on('keydown',(event:any)=>{
     if(event.key=='*'){
       resetView();

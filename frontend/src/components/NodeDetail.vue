@@ -1,13 +1,13 @@
 <script setup lang="ts">
 
 import * as tn from '@/TestNode';
-import { formContextKey } from 'element-plus';
+import { ConstantNode } from '@/TestNode';
+import { formContextKey, formItemValidateStates } from 'element-plus';
 import type { column } from 'element-plus/es/components/table-v2/src/common';
 import { onMounted, ref, watch } from 'vue';
 
 const form= ref(new tn.BaseNode('',{params:[]},{params:[]},0,0,'',{},'???'));
 
-const inputName = ref(new String());
 const shown =ref(false);
 
 const props = defineProps({
@@ -26,17 +26,8 @@ watch(props,()=>{
 const setFormNode = ()=>{
   if(props.graphName!=null&&props.nodeName!=null){
     form.value=tn.TestGraphFactory.getTestGraph(props.graphName).nameNodeMap.get(props.nodeName)!;
-    if(form.value.typeName==tn.ConstantNode.typeName){
+    if(form.value.typeName==tn.ConstantNode.name||form.value.typeName==tn.VariableNode.name){
       paramCount.value=form.value.outputs.params.length;
-      minCount.value=1
-      // 拷贝数据
-      varTable.value.splice(0,varTable.value.length);
-      
-    } else if(form.value.typeName==tn.SwitchNode.typeName){
-      paramCount.value=form.value.outputs.params.length-1;
-      minCount.value=0;
-      // 拷贝数据
-
     }
   }
 }
@@ -46,60 +37,29 @@ const dataChanged = (event)=>{
   dispatchEvent(updateEvent);
 }
 
-const handleDeleteCase = (row,index)=>{
-
-}
-
-const caseDataChanged = ()=>{
-  
-}
-
 const paramCount = ref(0)
-
-class SwitchData {
-  caseName:string;
-  branchName:string;
-  constructor(caseName,branchName){
-    this.caseName=caseName;
-    this.branchName=branchName;
-  }
-}
-
-class VarData {
-  varName:string;
-  varType:tn.ParamRuntimeTypeEnums;
-  varValue:string;
-  constructor(varName,varType,varValue){
-    this.varName=varName;
-    this.varType=varType;
-    this.varValue=varValue;
-  }
-}
-const switchTable = ref<SwitchData[]>([])
-const varTable = ref<ConstData[]>([])
 const minCount = ref(0);
 
-const filterHandler = (value,row,column)=>{
-  console.log('hello')
-  return row.paramName != 'prev';
-}
-
 const countChange = ()=>{
-  if(form.value.typeName==tn.SwitchNode.name){
-    while(paramCount.value>switchTable.value.length){
-      switchTable.value.push(new SwitchData('case_'+switchTable.value.length,'branch_'+switchTable.value.length));
+  if(form.value.typeName==tn.ConstantNode.name){
+    while(paramCount.value>form.value.outputs.params.length){
+      form.value.outputs.addParam(tn.ConstantParam,'data_'+form.value.outputs.params.length,tn.ParamRuntimeTypeEnums.StringValue);
     }
-    while(paramCount.value<switchTable.value.length){
-      switchTable.value.pop()
+    while(paramCount.value<form.value.outputs.params.length){
+      form.value.outputs.pop()
     }
-  } else if(form.value.typeName==tn.ConstantNode.name||form.value.typeName==tn.VariableNode.name){
-    while(paramCount.value>varTable.value.length){
-      varTable.value.push(new VarData('data_'+varTable.value.length,tn.ParamRuntimeTypeEnums.StringValue,''));
+  } else if(form.value.typeName==tn.SwitchNode.name) {
+    while(paramCount.value + 1>form.value.outputs.params.length){
+      form.value.inputs.addParam(tn.VariableParam,'case_'+form.value.outputs.params.length,tn.ParamRuntimeTypeEnums.VarNameValue);
+      form.value.outputs.addParam(tn.FlowParam,'next_'+form.value.outputs.params.length,tn.ParamRuntimeTypeEnums.VarNameValue);
     }
-    while(paramCount.value<varTable.value.length){
-      varTable.value.pop();
+    while(paramCount.value + 1<form.value.outputs.params.length){
+      form.value.inputs.pop()
+      form.value.outputs.pop()
     }
   }
+  const updateEvent = new CustomEvent('dataNodeChanged',{detail:{graphName:props.graphName,nodeName:props.nodeName}});
+  dispatchEvent(updateEvent);
 }
 
 </script>
@@ -125,16 +85,16 @@ const countChange = ()=>{
         <el-input-number v-model="paramCount" :max="5" :min="minCount" @change="countChange"></el-input-number>
       </el-form-item>
       <el-form-item label="输出参数" v-if="form.typeName && form.typeName==tn.ConstantNode.name || form.typeName==tn.VariableNode.name">
-        <el-table :data="varTable" style="width: 100%">
+        <el-table :data="form.outputs.params" style="width: 100%">
           <el-table-column label="参数名称">
             <template #default="scope">
-              <el-input v-model="scope.row.varName" :value="scope.row.varName" @input="dataChanged"></el-input>
+              <el-input v-model="scope.row.paramName" :value="scope.row.paramName" @input="dataChanged"></el-input>
             </template>
           </el-table-column>
 
           <el-table-column label="参数类型">
             <template #default="scope">
-              <el-select v-model="scope.row.varTable" placeholder="Select" @change="dataChanged">
+              <el-select v-model="scope.row.paramType" placeholder="Select" @change="dataChanged">
                 <template v-for="item in tn.ParamRuntimeTypeEnums">
                   <el-option v-if="item !=tn.ParamRuntimeTypeEnums.VarNameValue" :key="item" :label="tn.ParamTranslator.translate(item)" :value="item"/>
                 </template>
@@ -144,35 +104,51 @@ const countChange = ()=>{
 
           <el-table-column label="参数值">
             <template #default="scope">
-              <el-input v-model="scope.row.varValue" :value="scope.row.varValue" @input="dataChanged"></el-input>
+              <el-input v-model="scope.row.paramValue" :value="scope.row.paramValue" @input="dataChanged"></el-input>
             </template>
           </el-table-column>
         </el-table>
       </el-form-item>
 
       <!-- SwitchNode专用，用于添加case -->
-      <el-form-item label="输入选项" v-if="form.typeName && form.typeName==tn.SwitchNode.name">
-        <el-table :data="switchTable" style="width: 100%" >
-          <el-table-column label="输入选项名称" >
+
+      <el-form-item label="分支用例" v-if="form.typeName && form.typeName==tn.SwitchNode.name">
+        <el-table :data="form.inputs.params.slice(2)" style="width: 100%" >
+          <el-table-column label="分支用例名称" >
             <template #default="scope">
-              <el-input v-model="scope.row.caseName" :value="scope.row.caseName" @input="caseDataChanged"></el-input>
+              <template v-if="scope.row.paramName!='prev'&&scope.row.paramName!='data'">
+                <el-input v-model="scope.row.paramName" :value="scope.row.paramName" @input="dataChanged"></el-input>
+              </template>
             </template>
           </el-table-column>
 
-          <el-table-column label="输出分支名称">
-            <template #default="scope">
-                <el-input v-model="scope.row.branchName" :value="scope.row.branchName" @input="caseDataChanged"></el-input>
-            </template>
-          </el-table-column>
-
+          <!--
           <el-table-column label="操作">
             <template #default="scope">
               <el-button @click="handleDeleteCase(scope.row,scope.index)"><el-icon><Delete/></el-icon></el-button>
             </template>
           </el-table-column>
+          -->
         </el-table>
       </el-form-item>
 
+      <el-form-item label="输出分支" v-if="form.typeName && form.typeName==tn.SwitchNode.name">
+        <el-table :data="form.outputs.params.slice(1)" style="width: 100%" >
+          <el-table-column label="输出分支名称">
+            <template #default="scope">
+              <el-input v-model="scope.row.paramName" :value="scope.row.paramName" @input="dataChanged"></el-input>
+            </template>
+          </el-table-column>
+          
+          <!--
+          <el-table-column label="操作">
+            <template #default="scope">
+              <el-button @click="handleDeleteCase(scope.row,scope.index)"><el-icon><Delete/></el-icon></el-button>
+            </template>
+          </el-table-column>
+          -->
+        </el-table>
+      </el-form-item>
     </el-form>
   </div>
 </template>
