@@ -6,6 +6,9 @@ from enum import Enum
 import socket
 import asyncio
 import websockets
+import sys
+import glob
+import serial
 
 # ================= 运行结果、错误 ================= 
 class RunResult(dict):
@@ -46,6 +49,8 @@ class Tools:
     
     @staticmethod
     def log(global_data,logData,loggerName='Default'):
+        if isinstance(logData,bytes):
+            logData = logData.hex(sep=' ',bytes_per_sep=1)
         print('logging {}'.format(logData))
         if '$$log' not in global_data:
             global_data['$$log'] = ''
@@ -79,6 +84,15 @@ class Tools:
         except asyncio.TimeoutError as err:
             print('websocket send timeout: {}'.format(err))
 
+    @staticmethod
+    def createSeralFile(name,baudrate,parity='N',bytesize=8,stopbits=1):
+        return serial.Serial(port=name,baudrate=baudrate,parity=parity,stopbits=stopbits,bytesize=bytesize)
+    
+    @staticmethod
+    def strTobytes(string):
+        # 将十六进制字符串转为bytes
+        return bytes.fromhex(string)
+
 # ================= IO参数 抽象 ================= 
 class File:
     def __init__(self,file):
@@ -96,6 +110,8 @@ class TcpFile(File):
 class WebsocketFile(File):
     pass
 
+class SerialFile(File):
+    pass
 
 
 # ================= 运行节点 =================
@@ -153,7 +169,8 @@ class ConstantNode(BaseNode):
             elif runType == bool:
                 # bool 类型比较特殊, bool("0")为false，需要先转一下
                 self.outputs[i]['paramValue']=int(self.outputs[i]['paramValue'])
-            print('constant setting: {} {} '.format(self.outputs[i]['paramValue'],runType(self.outputs[i]['paramValue'])))
+            temp = runType(self.outputs[i]['paramValue'])
+            print('constant setting: {} {}'.format(temp,type(temp)))
             data[self.name+'$'+str(i)] = runType(self.outputs[i]['paramValue'])
 
 class VariableNode(ConstantNode):
@@ -172,10 +189,10 @@ class HttpNode(BaseNode):
 class SendNode(BaseNode):
     def _run(self,data,prevNode):
         file = data[self.inputs[1]['paramRef'][0]]
-        dataBody = data[self.inputs[2]['paramRef'][0]]
+        rawData = data[self.inputs[2]['paramRef'][0]]
         timeout = data[self.inputs[3]['paramRef'][0]]
         result = ''
-        dataBody = '{}'.format(dataBody).encode()
+        dataBody = '{}'.format(rawData).encode()
         if isinstance(file,HttpFile):
             resp = requests.request(method=file.method,url=file.url,data=dataBody,timeout=timeout)
             if not resp.ok:
@@ -186,6 +203,19 @@ class SendNode(BaseNode):
             result = file.file.send(dataBody)
         elif isinstance(file,WebsocketFile):
             result = asyncio.get_event_loop().run_until_complete(Tools.sendWebsocket(file.file,dataBody,timeout))
+        elif isinstance(file,SerialFile):
+            # 将str 转 bytes
+            if isinstance(rawData,str):
+                try:
+                    rawData = Tools.strTobytes(rawData)
+                except Exception as err:
+                    raise TestRuntimeError(self.name,'bad hex string')
+            elif isinstance(rawData,bytes):
+                pass
+            else:
+                raise TestRuntimeError(self.name,'unsupport serial send data type: {}'.format(type(rawData)))
+
+            result = file.file.write(rawData)
         else:
             raise TestRuntimeError(self.name,'unsupport SendNode file')
         data[self.name+'$1']=result
@@ -230,6 +260,29 @@ class RecvNode(BaseNode):
                 print('timeout')
         elif isinstance(file,WebsocketFile):
             outputData = asyncio.get_event_loop().run_until_complete(Tools.recvWebsocket(file.file,timeout))
+        elif isinstance(file,SerialFile):
+            # TODO: 更好的串口数据读出方案（支持各种流式数据读取）
+            # 等待数据准备完成
+            t1 = time.time()
+            print(file.file)
+            while file.file.inWaiting() == 0:
+                time.sleep(0.001)
+                if time.time()-t1 > timeout:
+                    print('timeout')
+                    break
+            # 保证数据全部取出
+            if file.file.inWaiting() !=0:
+                byte_number_1 = 0
+                byte_number_2 = 1
+                while byte_number_1 != byte_number_2:
+                    if time.time()-t1 > timeout:
+                        TestError.timeoutLimitExceeded()
+                    byte_number_1 = file.file.inWaiting()
+                    time.sleep(0.01)
+                    byte_number_2 = file.file.inWaiting()
+                # 一次性读取
+                outputData = file.file.read_all()
+            print('serial {}'.format(outputData))
         else:
             raise TestRuntimeError(self.name,'unsupport RecvNode file: {}'.format(file))
         data[self.name+'$1'] = outputData
@@ -338,6 +391,11 @@ class SwitchNode(BaseNode):
                 return self.__genNext(self.outputs[i-1])
         return self.__genNext(self.outputs[0])
 
+class SerialNode(BaseNode):
+    def _run(self,data,prevNode):
+        baudrate = data[self.inputs[1]['paramRef'][0]]
+        port = data[self.inputs[2]['paramRef'][0]]
+        data[self.name+'$1'] = SerialFile(Tools.createSeralFile(port,baudrate))
 
 class NodeFactory:
     @staticmethod
@@ -386,6 +444,8 @@ class NodeFactory:
             return VariableNode(graph_node=graph_node)
         elif graph_node['typeName']==SwitchNode.__name__:
             return SwitchNode(graph_node=graph_node)
+        elif graph_node['typeName']==SerialNode.__name__:
+            return SerialNode(graph_node=graph_node)
         else:
             print('unsupport node: {},pass'.format(graph_node['typeName']))
             raise TestIncompatibleError(msg='unsupport node: {}'.format(graph_node['typeName']))

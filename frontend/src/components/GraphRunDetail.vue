@@ -2,9 +2,11 @@
 
 import * as tn from '@/TestNode';
 import { ElNotification } from 'element-plus'
-import { onMounted, ref, watch, getCurrentInstance, nextTick } from 'vue';
+import { onMounted, ref, watch, getCurrentInstance, nextTick, onBeforeUnmount } from 'vue';
 import { ElTable } from 'element-plus';
-import { HttpUtil } from '@/Webutils';
+import { HttpUtil, SocketIOUtil } from '@/Webutils';
+import { parseStringStyle } from '@vue/shared';
+import { toNumber } from 'lodash';
 
 enum GraphRunStateEnum {
   UNKNOWN       = '未知',
@@ -68,8 +70,29 @@ class ServerInfo{
     this.log=log;
   }
 
+  connect() {
+    SocketIOUtil.open(this.address
+      , (message)=>{
+        console.log(message)
+      }
+      , (message)=>{
+        console.log(message)
+      }
+      , (message)=>{
+        console.log(message)
+      }
+      , (message)=>{
+        console.log(message)
+        this.disconnect()
+      })
+  }
+
+  disconnect() {
+    SocketIOUtil.close(this.address)
+  }
+
   updateLink(graphName:string){
-    
+    this.connect();
     HttpUtil.linkTest(this.address
       ,tn.TestGraphFactory.exportGraph(graphName)
       ,(resp:any)=>{
@@ -132,7 +155,7 @@ class ServerInfo{
 const serverUrl = ref("")
 const serverUrlList = ref([
   {
-    value:'http://127.0.0.1:5000',
+    value:'127.0.0.1:5000',
     label:'本地'
   }
 ])
@@ -145,18 +168,38 @@ onMounted(()=>{
   
 })
 
+onBeforeUnmount(()=>{
+  
+})
+
 watch(props,()=>{
   
 })
 
-function isURL(str_url:string) {// 验证url
-  try {
-    const newUrl = new URL(str_url);
-    console.log(newUrl);
-    return newUrl.protocol === 'http:' || newUrl.protocol === 'https:';
-  } catch (err) {
+// URL必须是一个ip:port的形式
+function isURL(str_url:string) {
+  if(str_url.match(/^\d+\.\d+\.\d+\.\d+\:\d+$/)===null){
     return false;
   }
+  // 进一步检测各段数字是否合法
+  var parts = str_url.split(/[\.\:]/)
+  for(var i=0;i!=4;++i){
+    if(0>toNumber(parts[i]) || toNumber(parts[i]) >=255){
+      return false
+    }
+  }
+  if(toNumber(parts[4])>65535||toNumber(parts[4])<0){
+    return false;
+  }
+  return true;
+  // try {
+  //   str_url.trim()
+  //   const newUrl = new URL(str_url);
+  //   console.log(newUrl);
+  //   return newUrl.protocol === 'http:' || newUrl.protocol === 'https:';
+  // } catch (err) {
+  //   return false;
+  // }
 }
 
 const serverTable = ref<ServerInfo[]>([]);
@@ -167,10 +210,11 @@ const addTestServer = ()=>{
   if(typeof(serverUrl.value)=='string'){
     tempUrl = {value:serverUrl.value,label:'自定义'};
   }
+  tempUrl.value= tempUrl.value.replace(/\s/g,'');
   if(isURL(tempUrl.value)==false){
     ElNotification.error({
       title: '注意',
-      message: '无效的URL',
+      message: '请输入 IP地址:端口',
       showClose: false,
       duration: 1000
     })
@@ -208,7 +252,7 @@ const runAllTest = ()=>{
 
 const selectFilterValue = ref('')
 const selectFilter = (val:any)=>{
-  console.log('filter: %o',val);
+  // console.log('filter: %o',val);
   selectFilterValue.value=val;
   if(selectFilterValue.value!='')
     serverUrl.value='';
@@ -216,7 +260,7 @@ const selectFilter = (val:any)=>{
 
 const selectBlur=(event:any)=>{
   // 失焦时不清空
-  console.log('blur: %o',serverUrl.value,selectFilterValue.value);
+  // console.log('blur: %o',serverUrl.value,selectFilterValue.value);
   if(serverUrl.value===''&&selectFilterValue.value!==''){
     serverUrl.value=selectFilterValue.value;
   }
@@ -237,7 +281,7 @@ const handleSelectionChange = (val: ServerInfo[]) => {
 const handleRowClick = (row:any,column:any,event:any)=>{
   if(column==null)
     return;
-  console.log(column,event.srcElement);
+  // console.log(column,event.srcElement);
   if(multipleSelection.value.includes(row)){
     multipleSelection.value.slice(multipleSelection.value.findIndex((value)=>{return value===row}),1);
     multipleTableRef.value?.toggleRowSelection(row,false);

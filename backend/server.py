@@ -4,9 +4,15 @@ import json
 from flask_cors import *
 from graph.Component import RunResult
 from service.TestService import CommonResponse,CommonResponseEnum
+# from service.WebSocketService import WebSocketService
+from flask_socketio import SocketIO, emit
+import time
 
 app = Flask('test-framework-backend')
+# 为http添加cors支持
 CORS(app,supports_credentials=True,resources=r'/*')
+# 为socket io 添加cors支持
+socketio = SocketIO(app,cors_allowed_origins='*')
 
 def buildBaseResp():
     resp = Response(status=200)
@@ -42,5 +48,26 @@ def runLinkTest():
     print(resp.data)
     return resp
 
+ws_namespace = '/websocket'
+
+@socketio.on(message='connect',namespace=ws_namespace)
+def echo_socket(message):
+    print("client connected.")
+    socketio.emit('response', {'data': 'connect'},namespace=ws_namespace)
+
+
+@socketio.on('disconnect', namespace=ws_namespace)
+def disconnect_msg():
+    print('client disconnected.')
+
+
+@socketio.on('message', namespace=ws_namespace)
+def mtest_message(message):
+    print(message)
+    # socketio.send(data='helloworld')
+    emit('response', {"msg":123},namespace = ws_namespace)
+    # emit("response")
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    # app.run(debug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
