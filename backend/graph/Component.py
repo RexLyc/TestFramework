@@ -9,13 +9,33 @@ import websockets
 import sys
 import glob
 import serial
+from concurrent.futures import ThreadPoolExecutor
+import threading
+import uuid
+import os
+
+class ExitStateEnum(Enum):
+    # 正常结束
+    SUCCESS     = 0
+    # 整体超时
+    TIMEOUT     = 1
+    # 测试异常
+    TESTERROR   = 2
+    # 其他异常
+    EXCEPTION   = 3
+    # 被杀死
+    KILLED      = 4
+    # 无效
+    INVALID     = 6
 
 # ================= 运行结果、错误 ================= 
 class RunResult(dict):
-    def __init__(self,timeElapsed,log):
+    # 总用时，全部日志，退出状态
+    def __init__(self,timeElapsed,log,exitState:ExitStateEnum):
         self.timeElapsed=timeElapsed
         self.log=log
-        dict.__init__(self,timeElapsed=timeElapsed,log=log)
+        self.exitState=exitState
+        dict.__init__(self,timeElapsed=timeElapsed,log=log,exitState=exitState)
 
 class TestError(RuntimeError):
     def __init__(self,nodeName='global',msg='error'):
@@ -398,57 +418,100 @@ class SerialNode(BaseNode):
         data[self.name+'$1'] = SerialFile(Tools.createSeralFile(port,baudrate))
 
 class NodeFactory:
+    nodeLibaries = dict()
+    @staticmethod
+    def nodeRegister(nodeType:type):
+        if not issubclass(nodeType,BaseNode):
+            raise RuntimeError("invalid nodeType, must subclass of BaseNode")
+        # 同名覆盖
+        NodeFactory.nodeLibaries[nodeType.__name__]=nodeType
+
     @staticmethod
     def createNode(graph_node) -> BaseNode:
-        if graph_node['typeName']==BeginNode.__name__:
-            return BeginNode(graph_node=graph_node)
-        elif graph_node['typeName']==EndNode.__name__:
-            return EndNode(graph_node=graph_node)
-        elif graph_node['typeName']==ConstantNode.__name__:
-            return ConstantNode(graph_node=graph_node)
-        elif graph_node['typeName']==HttpNode.__name__:
-            return HttpNode(graph_node=graph_node)
-        elif graph_node['typeName']==SendNode.__name__:
-            return SendNode(graph_node=graph_node)
-        elif graph_node['typeName']==LogNode.__name__:
-            return LogNode(graph_node=graph_node)
-        elif graph_node['typeName']==ExtractNode.__name__:
-            return ExtractNode(graph_node=graph_node)
-        elif graph_node['typeName']==MergeNode.__name__:
-            return MergeNode(graph_node=graph_node)
-        elif graph_node['typeName']==TCPNode.__name__:
-            return TCPNode(graph_node=graph_node)
-        elif graph_node['typeName']==RecvNode.__name__:
-            return RecvNode(graph_node=graph_node)
-        elif graph_node['typeName']==WebSocketNode.__name__:
-            return WebSocketNode(graph_node=graph_node)
-        elif graph_node['typeName']==IfNode.__name__:
-            return IfNode(graph_node=graph_node)
-        elif graph_node['typeName']==AddMinusNode.__name__:
-            return AddMinusNode(graph_node=graph_node)
-        elif graph_node['typeName']==MultiDivNode.__name__:
-            return MultiDivNode(graph_node=graph_node)
-        elif graph_node['typeName']==BiggerNode.__name__:
-            return BiggerNode(graph_node=graph_node)
-        elif graph_node['typeName']==EqualNode.__name__:
-            return EqualNode(graph_node=graph_node)
-        elif graph_node['typeName']==AndNode.__name__:
-            return AndNode(graph_node=graph_node)
-        elif graph_node['typeName']==OrNode.__name__:
-            return OrNode(graph_node=graph_node)
-        elif graph_node['typeName']==NotNode.__name__:
-            return NotNode(graph_node=graph_node)
-        elif graph_node['typeName']==BarrierNode.__name__:
-            return BarrierNode(graph_node=graph_node)
-        elif graph_node['typeName']==VariableNode.__name__:
-            return VariableNode(graph_node=graph_node)
-        elif graph_node['typeName']==SwitchNode.__name__:
-            return SwitchNode(graph_node=graph_node)
-        elif graph_node['typeName']==SerialNode.__name__:
-            return SerialNode(graph_node=graph_node)
+        if graph_node['typeName'] in NodeFactory.nodeLibaries:
+            return NodeFactory.nodeLibaries[graph_node['typeName']](graph_node=graph_node)
         else:
             print('unsupport node: {},pass'.format(graph_node['typeName']))
             raise TestIncompatibleError(msg='unsupport node: {}'.format(graph_node['typeName']))
+        # if graph_node['typeName']==BeginNode.__name__:
+        #     return BeginNode(graph_node=graph_node)
+        # elif graph_node['typeName']==EndNode.__name__:
+        #     return EndNode(graph_node=graph_node)
+        # elif graph_node['typeName']==ConstantNode.__name__:
+        #     return ConstantNode(graph_node=graph_node)
+        # elif graph_node['typeName']==HttpNode.__name__:
+        #     return HttpNode(graph_node=graph_node)
+        # elif graph_node['typeName']==SendNode.__name__:
+        #     return SendNode(graph_node=graph_node)
+        # elif graph_node['typeName']==LogNode.__name__:
+        #     return LogNode(graph_node=graph_node)
+        # elif graph_node['typeName']==ExtractNode.__name__:
+        #     return ExtractNode(graph_node=graph_node)
+        # elif graph_node['typeName']==MergeNode.__name__:
+        #     return MergeNode(graph_node=graph_node)
+        # elif graph_node['typeName']==TCPNode.__name__:
+        #     return TCPNode(graph_node=graph_node)
+        # elif graph_node['typeName']==RecvNode.__name__:
+        #     return RecvNode(graph_node=graph_node)
+        # elif graph_node['typeName']==WebSocketNode.__name__:
+        #     return WebSocketNode(graph_node=graph_node)
+        # elif graph_node['typeName']==IfNode.__name__:
+        #     return IfNode(graph_node=graph_node)
+        # elif graph_node['typeName']==AddMinusNode.__name__:
+        #     return AddMinusNode(graph_node=graph_node)
+        # elif graph_node['typeName']==MultiDivNode.__name__:
+        #     return MultiDivNode(graph_node=graph_node)
+        # elif graph_node['typeName']==BiggerNode.__name__:
+        #     return BiggerNode(graph_node=graph_node)
+        # elif graph_node['typeName']==EqualNode.__name__:
+        #     return EqualNode(graph_node=graph_node)
+        # elif graph_node['typeName']==AndNode.__name__:
+        #     return AndNode(graph_node=graph_node)
+        # elif graph_node['typeName']==OrNode.__name__:
+        #     return OrNode(graph_node=graph_node)
+        # elif graph_node['typeName']==NotNode.__name__:
+        #     return NotNode(graph_node=graph_node)
+        # elif graph_node['typeName']==BarrierNode.__name__:
+        #     return BarrierNode(graph_node=graph_node)
+        # elif graph_node['typeName']==VariableNode.__name__:
+        #     return VariableNode(graph_node=graph_node)
+        # elif graph_node['typeName']==SwitchNode.__name__:
+        #     return SwitchNode(graph_node=graph_node)
+        # elif graph_node['typeName']==SerialNode.__name__:
+        #     return SerialNode(graph_node=graph_node)
+        # else:
+        #     print('unsupport node: {},pass'.format(graph_node['typeName']))
+        #     raise TestIncompatibleError(msg='unsupport node: {}'.format(graph_node['typeName']))
+
+NodeFactory.nodeRegister(BeginNode)
+NodeFactory.nodeRegister(EndNode)
+NodeFactory.nodeRegister(ConstantNode)
+NodeFactory.nodeRegister(HttpNode)
+NodeFactory.nodeRegister(SendNode)
+NodeFactory.nodeRegister(LogNode)
+NodeFactory.nodeRegister(ExtractNode)
+NodeFactory.nodeRegister(MergeNode)
+NodeFactory.nodeRegister(TCPNode)
+NodeFactory.nodeRegister(RecvNode)
+NodeFactory.nodeRegister(WebSocketNode)
+NodeFactory.nodeRegister(IfNode)
+NodeFactory.nodeRegister(AddMinusNode)
+NodeFactory.nodeRegister(MultiDivNode)
+NodeFactory.nodeRegister(BiggerNode)
+NodeFactory.nodeRegister(EqualNode)
+NodeFactory.nodeRegister(AndNode)
+NodeFactory.nodeRegister(OrNode)
+NodeFactory.nodeRegister(NotNode)
+NodeFactory.nodeRegister(BarrierNode)
+NodeFactory.nodeRegister(VariableNode)
+NodeFactory.nodeRegister(SwitchNode)
+NodeFactory.nodeRegister(SerialNode)
+
+class TestParam:
+    def __init__(self,totalTimeout=60000) -> None:
+        self.totalTimeout=totalTimeout
+        # 标记测试是否可以继续
+        self.toRun=True
 
 class TestGraph:
     def __init__(self,global_data,nodes,startName,endName):
@@ -460,27 +523,45 @@ class TestGraph:
         # 上一个调度执行的节点
         self.lastRunNode = None
     
-    def run(self):
-        # 传递变量区
-        # runQueue内容tuple，分别是节点前驱和后继
-        self.runQueue.put((None,self.nodes[self.startName]))
-        a=time.time()
-        Tools.log(self.global_data,'begin running')
-        while not self.runQueue.empty():
-            (prevNode,currentNode) = self.runQueue.get()
-            print('{} running'.format(currentNode.name))
-            nextNodes = currentNode.doRun(self.global_data,prevNode)
-            print('next: {}'.format(nextNodes))
-            for node in nextNodes:
-                self.runQueue.put((currentNode,self.nodes[node]))
-            self.lastRunNode = currentNode
-        Tools.log(self.global_data,'end running')
-        b=time.time()
-        Tools.log(self.global_data,'time elapsed :{}'.format(b-a))
-        if not isinstance(self.lastRunNode,EndNode):
-            Tools.log(self.global_data,'Test ended at Non-EndNode')
-            raise TestRuntimeError(nodeName = self.lastRunNode.name,msg='Test ended at Non-EndNode')
-        return RunResult(b-a,self.global_data['$$log'])
+    def run(self,testParam:TestParam):
+        try:
+            # 传递变量区
+            # runQueue内容tuple，分别是节点前驱和后继
+            self.runQueue.put((None,self.nodes[self.startName]))
+            a=time.time()
+            Tools.log(self.global_data,'begin running')
+            while not self.runQueue.empty():
+                # 整体超时退出
+                if time.time()-a > testParam.totalTimeout:
+                    Tools.log(self.global_data,'graph test timeout')
+                    return RunResult(time.time()-a,self.global_data['$$log'],ExitStateEnum.TIMEOUT)
+                # 被杀死
+                if testParam.toRun == False:
+                    Tools.log(self.global_data,'get killed')
+                    return RunResult(time.time()-a,self.global_data['$$log'],ExitStateEnum.KILLED)
+                
+                # 继续执行
+                (prevNode,currentNode) = self.runQueue.get()
+                print('{} running'.format(currentNode.name))
+                nextNodes = currentNode.doRun(self.global_data,prevNode)
+                print('next: {}'.format(nextNodes))
+                for node in nextNodes:
+                    self.runQueue.put((currentNode,self.nodes[node]))
+                self.lastRunNode = currentNode
+            
+            Tools.log(self.global_data,'end running')
+            b=time.time()
+            Tools.log(self.global_data,'time elapsed :{}'.format(b-a))
+            if not isinstance(self.lastRunNode,EndNode):
+                Tools.log(self.global_data,'Test ended at Non-EndNode')
+                raise TestRuntimeError(nodeName = self.lastRunNode.name,msg='Test ended at Non-EndNode')
+        except TestError as err:
+            return RunResult(b-a,self.global_data['$$log'],ExitStateEnum.TESTERROR)
+        except Exception as err:
+            return RunResult(b-a,self.global_data['$$log'],ExitStateEnum.EXCEPTION)
+        return RunResult(b-a,self.global_data['$$log'],ExitStateEnum.SUCCESS)
+
+
 
 class TestGraphFactory:
     @staticmethod
@@ -500,3 +581,36 @@ class TestGraphFactory:
             elif isinstance(node,ConstantNode):
                 node.doRun(global_data)
         return TestGraph(global_data=global_data,nodes=nodes,startName=startName,endName=endName)
+
+class TestPlan:
+    def __init__(self,testGraph:TestGraph,testParam:TestParam=None,planUUID:uuid.UUID=None):
+        self.graph = testGraph
+        self.planUUID = planUUID
+        # 默认测试参数
+        self.testParam = testParam or TestParam()
+        # 自动生成UUID
+        self.planUUID = planUUID or uuid.uuid4()
+
+class TestPlanFactory:
+    @staticmethod
+    def buildTestPlan(jsonData):
+        return TestPlan(TestGraphFactory.buildGraph(jsonData))
+
+class TestExecutor:
+    testPool = ThreadPoolExecutor(max_workers=10)
+    testResultMap = dict()
+    testPlanMap = dict()
+
+    @staticmethod
+    def submitTestTask(testPlan:TestPlan,doneCallBack):
+        # 保存测试计划
+        TestExecutor.testPlanMap[testPlan.planUUID]=testPlan
+        # 保存Future
+        future = TestExecutor.testPool.submit(testPlan.graph.run,testPlan.testParam)
+        future.add_done_callback(doneCallBack)
+        TestExecutor.testResultMap[testPlan.planUUID] = future
+
+    @staticmethod
+    def killTestTask(testPlanUUID:uuid.UUID):
+        TestExecutor.testResultMap[testPlanUUID].cancel()
+        TestExecutor.testPlanMap[testPlanUUID].testParam.toRun = False

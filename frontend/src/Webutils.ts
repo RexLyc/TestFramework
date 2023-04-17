@@ -20,9 +20,33 @@ export class HttpUtil {
 
 import { io,Manager } from "socket.io-client";
 
+export enum CommonMessageType {
+    // 测试图提交测试
+    SUBMIT           = "submit",
+    // 心跳
+    PING             = "ping",
+    // 测试执行结果
+    TEST_RESULT      = "result",
+    // 测试执行状态
+    TEST_STATE       = "test_state",
+}
+  
+export class CommonMessage {
+    // 时间戳
+    msgTime      :number;
+    // 消息类型
+    msgType      :CommonMessageType;
+    msgData      :object;
+    constructor(type:CommonMessageType,data:object){
+        this.msgTime=Date.now()
+        this.msgType=type;
+        this.msgData=data;
+    }
+}
+
 export class SocketIOUtil {
     private static ioMap:Map<string,any> = new Map()
-    static open(url:string,onOpen:any,onClose:any,onMessage:any,onError:any){
+    static open(url:string,onOpen:any,onClose:any,onError:any,onMessages:Map<string,any>){
         if(this.ioMap.has(url)&&this.ioMap.get(url)?.readyState==WebSocket.OPEN){
             // 提示该url已被占用，不能创建
             return false;
@@ -36,11 +60,20 @@ export class SocketIOUtil {
         const tempWS = io("ws://"+url+"/websocket",{reconnection:false})
         tempWS.on("connect",onOpen);
         tempWS.on("disconnect",onClose);
-        tempWS.on("response",onMessage);
         tempWS.on("error",onError);
-        tempWS.emit("message","hello world");
+        for(let listener of onMessages){
+            tempWS.on(listener[0],listener[1])
+        }
         this.ioMap.set(url,tempWS);
         return true
+    }
+
+    static send(url:string,message:CommonMessage){
+        if(!this.ioMap.has(url)){
+            return false;
+        }
+        this.ioMap.get(url).emit(message.msgType,message)
+        return true;
     }
 
     static close(url:string){

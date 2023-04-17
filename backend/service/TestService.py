@@ -1,30 +1,22 @@
-from graph.Component import TestGraphFactory,TestError,TestRuntimeError,TestIncompatibleError,RunResult
-from enum import Enum
-
-class CommonResponse(dict):
-    def __init__(self,code,data=None):
-        self.code=code
-        self.data=data
-        dict.__init__(self,code=code,data=data)
-
-class CommonResponseEnum(Enum):
-    SUCCESS       = 0
-    INCOMPATIBLE  = 1
-    BUSY          = 2
-    EXCEPTION     = 3
-    FAILED        = 4
+from graph.Component import TestPlanFactory,TestExecutor,TestIncompatibleError,TestRuntimeError,TestError,RunResult
+from MessageService import *
 
 class TestService:
     @staticmethod
-    def run(jsonGraph):
-        try:
-            graph = TestGraphFactory.buildGraph(jsonGraph)
-            return CommonResponse(CommonResponseEnum.SUCCESS.value,graph.run())
-        except TestIncompatibleError as err:
-            return CommonResponse(CommonResponseEnum.INCOMPATIBLE.value,RunResult(0,'{}'.format(err)))
-        except (TestRuntimeError, TestError, Exception) as err:
-            return CommonResponse(CommonResponseEnum.EXCEPTION.value,RunResult(0,'{}'.format(err)))
+    def getTestResult(jsonQuery):
+        pass
 
     @staticmethod
-    def linkTest(jsonGraph):
-        return CommonResponse(CommonResponseEnum.SUCCESS.value)
+    def getTestState(jsonQuery):
+        pass
+
+    @staticmethod
+    def submit(jsonGraph):
+        try:
+            testPlan = TestPlanFactory.buildTestPlan(jsonData=jsonGraph)
+            TestExecutor.submitTestTask(testPlan, )
+            return CommonMessage(CommonMessageType.SUBMIT.value,msgData=)
+        except TestIncompatibleError as err:
+            return CommonResponse(CommonResponseEnum.INCOMPATIBLE.value,RunResult(0,'{}'.format(err)))
+        except Exception as err:
+            return CommonResponse(CommonResponseEnum.EXCEPTION.value,RunResult(0,'{}'.format(err)))

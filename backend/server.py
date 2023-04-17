@@ -3,70 +3,98 @@ from service.TestService import TestService
 import json
 from flask_cors import *
 from graph.Component import RunResult
-from service.TestService import CommonResponse,CommonResponseEnum
+from service.TestService import CommonMessageType
 # from service.WebSocketService import WebSocketService
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit,join_room,leave_room
+
 import time
 
 app = Flask('test-framework-backend')
 # 为http添加cors支持
-CORS(app,supports_credentials=True,resources=r'/*')
+# CORS(app,supports_credentials=True,resources=r'/*')
+
 # 为socket io 添加cors支持
 socketio = SocketIO(app,cors_allowed_origins='*')
 
-def buildBaseResp():
-    resp = Response(status=200)
-    resp.headers['Access-Control-Allow-Origin']='*'
-    resp.headers['Access-Control-Allow-Methods']='OPTIONS,HEAD,GET,POST'
-    resp.headers['Access-Control-Allow-Headers']='x-requested-with'
-    return resp
+# def buildBaseResp():
+#     resp = Response(status=200)
+#     resp.headers['Access-Control-Allow-Origin']='*'
+#     resp.headers['Access-Control-Allow-Methods']='OPTIONS,HEAD,GET,POST'
+#     resp.headers['Access-Control-Allow-Headers']='x-requested-with'
+#     return resp
 
-@app.route('/hello',methods=['post'])
-def hello():
-    print(request.data)
-    return 'greetings from backed.'
+# @app.route('/hello',methods=['post'])
+# def hello():
+#     print(request.data)
+#     return 'greetings from backed.'
 
-@app.route('/runTestGraph',methods=['post'])
-def runTestGraph():
-    print(runTestGraph.__name__+' begin')
-    resp = buildBaseResp()
-    # 必须添加异常处理，否则会无法返回CORS
-    try:
-        resp.data = json.dumps(TestService.run(request.get_data()))
-    except Exception as err:
-        resp.data = json.dumps(CommonResponse(CommonResponseEnum.EXCEPTION.value,RunResult(0,'{}'.format(err))))
-    return resp
+# @app.route('/runTestGraph',methods=['post'])
+# def runTestGraph():
+#     print(runTestGraph.__name__+' begin')
+#     resp = buildBaseResp()
+#     # 必须添加异常处理，否则会无法返回CORS
+#     try:
+#         resp.data = json.dumps(TestService.run(request.get_data()))
+#     except Exception as err:
+#         resp.data = json.dumps(CommonResponse(CommonResponseEnum.EXCEPTION.value,RunResult(0,'{}'.format(err))))
+#     return resp
 
-@app.route('/linkTest',methods=['post'])
-def runLinkTest():
-    resp = buildBaseResp()
-    # 必须添加异常处理，否则会无法返回CORS
-    try:
-        resp.data = json.dumps(TestService.linkTest(request.get_data()))
-    except Exception as err:
-        resp.data = json.dumps(CommonResponse(CommonResponseEnum.EXCEPTION.value))
-    print(resp.data)
-    return resp
+# @app.route('/linkTest',methods=['post'])
+# def runLinkTest():
+#     resp = buildBaseResp()
+#     # 必须添加异常处理，否则会无法返回CORS
+#     try:
+#         resp.data = json.dumps(TestService.linkTest(request.get_data()))
+#     except Exception as err:
+#         resp.data = json.dumps(CommonResponse(CommonResponseEnum.EXCEPTION.value))
+#     print(resp.data)
+#     return resp
 
 ws_namespace = '/websocket'
 
+
+# ==================================== 基础消息 ====================================
+# 连接处理
 @socketio.on(message='connect',namespace=ws_namespace)
-def echo_socket(message):
-    print("client connected.")
-    socketio.emit('response', {'data': 'connect'},namespace=ws_namespace)
+def on_connect(message):
+    print("client connected. {}".format(request.sid))
+    socketio.emit('connect', {'data': 'connect'},namespace=ws_namespace)
 
-
+# 连接断开处理
 @socketio.on('disconnect', namespace=ws_namespace)
-def disconnect_msg():
+def on_disconnect():
     print('client disconnected.')
 
+# 连接错误处理
+@socketio.on('error', namespace=ws_namespace)
+def on_error():
+    print('client connect error.')
 
-@socketio.on('message', namespace=ws_namespace)
-def mtest_message(message):
-    print(message)
-    # socketio.send(data='helloworld')
-    emit('response', {"msg":123},namespace = ws_namespace)
-    # emit("response")
+# ==================================== 自定义消息 ====================================
+# 心跳
+@socketio.on(CommonMessageType.PING.value, namespace=ws_namespace)
+def on_ping(message):
+    print('client ping')
+    emit('ping', {}, namespace = ws_namespace)
+
+# 提交测试图
+@socketio.on(CommonMessageType.SUBMIT.value,namespace=ws_namespace)
+def on_submit(message):
+    print('get test graph submit {}'.format(message))
+    result = TestService.submit(request.get_data(),request.sid)
+    emit(CommonMessageType.SUBMIT.value,result,to=request.sid)
+
+@socketio.on(CommonMessageType.TEST_RESULT.value,namespace=ws_namespace)
+def on_test_result(message):
+    print('query test result {}'.format(message))
+    result = TestService.getTestResult(request.get_data())
+    emit(CommonMessageType.TEST_RESULT.value,result,to=request.sid)
+
+@socketio.on(CommonMessageType.TEST_STATE.value,namespace=ws_namespace)
+def on_test_state(message):
+    print('query test state {}'.format(message))
+    result = TestService.getTestState(request.get_data())
+    emit(CommonMessageType.TEST_STATE.value,result,to=request.sid)
 
 if __name__ == '__main__':
     # app.run(debug=True)

@@ -1,11 +1,10 @@
 <script setup lang="ts">
 
 import * as tn from '@/TestNode';
-import { ElNotification } from 'element-plus'
+import { ElNotification, uploadBaseProps } from 'element-plus'
 import { onMounted, ref, watch, getCurrentInstance, nextTick, onBeforeUnmount } from 'vue';
 import { ElTable } from 'element-plus';
-import { HttpUtil, SocketIOUtil } from '@/Webutils';
-import { parseStringStyle } from '@vue/shared';
+import { HttpUtil, SocketIOUtil, CommonMessageType, CommonMessage} from '@/Webutils';
 import { toNumber } from 'lodash';
 
 enum GraphRunStateEnum {
@@ -56,66 +55,86 @@ class CommonResponse<T = any> {
 
 const {ctx:that} = getCurrentInstance() as any;
 
+
+
 class ServerInfo{
   name        :string;
   address     :string;
   link        :ServerLinkStateEnum;
   runState    :GraphRunStateEnum;
   log         :string;
+  isReleased  :boolean;
   constructor(name:string,address:string,link:ServerLinkStateEnum,runState:GraphRunStateEnum,log:string){
     this.name=name;
     this.address=address;
     this.link=link;
     this.runState=runState;
     this.log=log;
+    this.isReleased=false;
   }
 
-  connect() {
+  socketConnect() {
     SocketIOUtil.open(this.address
-      , (message)=>{
-        console.log(message)
+        // onOpen
+      , (message:any)=>{
+        console.log("onOpen",message)
+        SocketIOUtil.send(this.address,new CommonMessage(ServiceCommandEnum.PING,{}))
       }
-      , (message)=>{
-        console.log(message)
+        // onClose
+      , (message:any)=>{
+        console.log("onClose",message)
+        this.socketDisconnect();
+        this.link=ServerLinkStateEnum.OFFLINE;
       }
-      , (message)=>{
-        console.log(message)
+        // onError
+      , (message:any)=>{
+        console.log("onError",message)
+        this.link=ServerLinkStateEnum.OFFLINE;
+        this.socketDisconnect()
       }
-      , (message)=>{
-        console.log(message)
-        this.disconnect()
-      })
+      , new Map([
+        // 心跳反馈
+        [CommonMessageType.PING.toString(),(message:any)=>{
+          console.log("ping message: %o",message)
+          this.link=ServerLinkStateEnum.WAITING;
+        }]
+      ])
+    )
   }
 
-  disconnect() {
-    SocketIOUtil.close(this.address)
+  socketDisconnect() {
+    SocketIOUtil.close(this.address);
+    if(!this.isReleased){
+      this.updateLink();
+    }
   }
 
-  updateLink(graphName:string){
-    this.connect();
-    HttpUtil.linkTest(this.address
-      ,tn.TestGraphFactory.exportGraph(graphName)
-      ,(resp:any)=>{
-        if(resp.status===200){
-          // success run over 
-          const commonResp = new CommonResponse(resp.data.code,{});
-          if(commonResp.code===CommonResponseEnum.BUSY)
-            this.link=ServerLinkStateEnum.BUSY;
-          else if(commonResp.code===CommonResponseEnum.SUCCESS)
-            this.link=ServerLinkStateEnum.WAITING;
-          else if(commonResp.code===CommonResponseEnum.EXCEPTION)
-            this.link=ServerLinkStateEnum.EXCEPTION;
-        } else {
-          this.link = ServerLinkStateEnum.EXCEPTION;
-        }
-      }
-      ,(error:any)=>{
-        console.log(error);
-        if(error.response==null || error.response.status===404)
-          this.link = ServerLinkStateEnum.OFFLINE;
-        else
-          this.link = ServerLinkStateEnum.EXCEPTION;
-      });
+  updateLink(){
+    this.link = ServerLinkStateEnum.OFFLINE;
+    this.socketConnect();
+    // HttpUtil.linkTest(this.address
+    //   ,tn.TestGraphFactory.exportGraph(graphName)
+    //   ,(resp:any)=>{
+    //     if(resp.status===200){
+    //       // success run over 
+    //       const commonResp = new CommonResponse(resp.data.code,{});
+    //       if(commonResp.code===CommonResponseEnum.BUSY)
+    //         this.link=ServerLinkStateEnum.BUSY;
+    //       else if(commonResp.code===CommonResponseEnum.SUCCESS)
+    //         this.link=ServerLinkStateEnum.WAITING;
+    //       else if(commonResp.code===CommonResponseEnum.EXCEPTION)
+    //         this.link=ServerLinkStateEnum.EXCEPTION;
+    //     } else {
+    //       this.link = ServerLinkStateEnum.EXCEPTION;
+    //     }
+    //   }
+    //   ,(error:any)=>{
+    //     console.log(error);
+    //     if(error.response==null || error.response.status===404)
+    //       this.link = ServerLinkStateEnum.OFFLINE;
+    //     else
+    //       this.link = ServerLinkStateEnum.EXCEPTION;
+    //   });
   }
 
   updateRunState(graphName:string){
@@ -149,6 +168,11 @@ class ServerInfo{
 
   updateLog(graphName:string){
     // 获取完整日志
+  }
+
+  release(){
+    this.isReleased=true;
+    this.socketDisconnect();
   }
 }
 
@@ -232,7 +256,7 @@ const addTestServer = ()=>{
   // 必须使用ref，否则未代理对象，无法正确触发重新渲染（v-if动态决定tag的颜色）
   const server = ref(new ServerInfo(tempUrl.label,tempUrl.value,ServerLinkStateEnum.UNKNOWN,GraphRunStateEnum.UNKNOWN,""))
   serverTable.value.push(server.value);
-  server.value.updateLink(props.graphName!);
+  server.value.updateLink();
   serverUrl.value='';
 }
 
@@ -268,6 +292,7 @@ const selectBlur=(event:any)=>{
 
 const handleDelete = ()=>{
   for(let select of multipleSelection.value) {
+    select.release();
     serverTable.value.splice(serverTable.value.findIndex((value,index)=>{return value===select}),1);
   }
 }
