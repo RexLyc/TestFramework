@@ -26,9 +26,31 @@ export enum CommonMessageType {
     // 心跳
     PING             = "ping",
     // 测试执行结果
-    TEST_RESULT      = "result",
+    TEST_RESULT      = "test_result",
     // 测试执行状态
     TEST_STATE       = "test_state",
+    // 测试控制
+    TEST_COMMAND     = "test_command",
+}
+
+export enum TestCommandType {
+    // 杀死当前测试
+    KILL        = "kill",
+    // 暂停当前测试
+    PAUSE       = "pause",
+    // 继续当前测试
+    CONTINUE    = "continue",
+    // 步进
+    STEP        = "step",
+}
+
+export class TestCommand {
+    testUUID        :string;
+    command     :TestCommandType;
+    constructor(testUUID:string,command:TestCommandType){
+        this.testUUID=testUUID;
+        this.command=command
+    }
 }
   
 export class CommonMessage {
@@ -36,12 +58,35 @@ export class CommonMessage {
     msgTime      :number;
     // 消息类型
     msgType      :CommonMessageType;
-    msgData      :object;
-    constructor(type:CommonMessageType,data:object){
+    msgData      :any;
+    constructor(type:CommonMessageType,data:any){
         this.msgTime=Date.now()
         this.msgType=type;
         this.msgData=data;
     }
+}
+
+// 提交状态
+export enum SubmitResultType{
+    SUCCESS      = 0,
+    INCOMPATIBLE = 1,
+    EXCEPTION    = 2,
+}
+
+// 测试结束状态
+export enum ExitStateEnum {
+    // # 正常结束
+    SUCCESS     = 0,
+    // # 整体超时
+    TIMEOUT     = 1,
+    // # 测试异常
+    TESTERROR   = 2,
+    // # 其他异常
+    EXCEPTION   = 3,
+    // # 被杀死
+    KILLED      = 4,
+    // # 无效
+    INVALID     = 6,
 }
 
 export class SocketIOUtil {
@@ -72,6 +117,7 @@ export class SocketIOUtil {
         if(!this.ioMap.has(url)){
             return false;
         }
+        console.log('%o',message)
         this.ioMap.get(url).emit(message.msgType,message)
         return true;
     }

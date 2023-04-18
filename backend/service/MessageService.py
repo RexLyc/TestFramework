@@ -9,22 +9,24 @@ from flask_socketio import SocketIO, emit
 # 消息类型
 class MessageType(Enum):
     #  测试图提交测试
-    SUBMIT           = "submit",
+    SUBMIT           = "submit"
     #  心跳
-    PING             = "ping",
+    PING             = "ping"
     #  测试执行结果
-    TEST_RESULT      = "result",
+    TEST_RESULT      = "test_result"
     #  测试执行状态
-    TEST_STATE       = "test_state",
+    TEST_STATE       = "test_state"
+    #  测试控制
+    TEST_COMMAND     = "test_command"
 
 # 消息核心数据
 class MessageBody(dict):
-    def __init__(self,msgType,msgData) -> None:
+    def __init__(self,msgType:MessageType,msgData) -> None:
         # msgData类型和msgType相关
-        self.msgType=msgType
+        self.msgType=msgType.value
         self.msgData=msgData
-        self.msgTime=time.now()
-        dict.__init__(self,msgType=msgType,msgData=msgData,msgTime=self.msgType)
+        self.msgTime=time.time()
+        dict.__init__(self,msgType=self.msgType,msgData=msgData,msgTime=self.msgTime)
 
 # 消息队列基本消息体
 class Message:
@@ -45,7 +47,16 @@ class MessageContainer:
 
     @staticmethod
     def getMessage(testPlanUUID :uuid.UUID, index):
-        return MessageContainer.listMap[testPlanUUID][index]
+        if testPlanUUID in MessageContainer.listMap:
+            return MessageContainer.listMap[testPlanUUID][index]
+    
+    @staticmethod
+    def getMessages(testPlanUUID: uuid.UUID, startIndex):
+        if testPlanUUID in MessageContainer.listMap:
+            return MessageContainer.listMap[testPlanUUID][startIndex:]
+        else:
+            return []
+
 
 # 记录指定消费者的所有订阅测试计划
 class GraphOfConsumer:
@@ -57,11 +68,19 @@ class GraphOfConsumer:
         
     def subscribe(self,testPlanUUID):
         if testPlanUUID not in self.subTestPlan:
-            self.subTestPlan.add(testPlanUUID,0)
+            self.subTestPlan[testPlanUUID]=0
     
     def desubscribe(self,testPlanUUID):
         if testPlanUUID in self.subTestPlan:
             self.subTestPlan.pop(testPlanUUID,0)
+    
+    def consumeAck(self,testPlanUUID):
+        if testPlanUUID in self.subTestPlan:
+            self.subTestPlan[testPlanUUID] += 1
+
+    def getIndex(self,testPlanUUID):
+        if testPlanUUID in self.subTestPlan:
+            return self.subTestPlan[testPlanUUID]
 
 # 记录指定测试计划的所有消费者
 class ConsumerOfGraph:
@@ -73,11 +92,22 @@ class ConsumerOfGraph:
     
     def subscribe(self,consumerId):
         if consumerId not in self.consumers:
-            self.consumers.add(consumerId,0)
+            self.consumers[consumerId]=0
     
     def desubscribe(self,consumerId):
         if consumerId in self.consumers:
             self.consumers.pop(consumerId)
+    
+    def consumeAck(self,consumerId):
+        if consumerId in self.consumers:
+            self.consumers[consumerId] += 1
+
+    def getIndex(self,consumerId):
+        if consumerId in self.consumers:
+            return self.consumers[consumerId]
+    
+    def getAllIndex(self):
+        return self.consumers
 
 # 提供测试消息收集、订阅、取消订阅、发送等功能
 class MessageService:
@@ -87,13 +117,17 @@ class MessageService:
     testPlanMap = dict()
     # 网络接口
     socket      = None
+    # 命名空间
+    namespace   = None
 
     @staticmethod
-    def initSocket(socketio:SocketIO):
+    def initSocket(socketio:SocketIO,namespace):
         MessageService.socket=socketio
+        MessageService.namespace=namespace
 
     @staticmethod
     def subscribe(consumerId,testPlanUUID):
+        print('consumerId: {} subscribe testPlan: {}'.format(consumerId,testPlanUUID))
         # 指定消费者订阅测试计划
         if consumerId not in MessageService.consumerMap:
             MessageService.consumerMap[consumerId]=GraphOfConsumer(consumerId)
@@ -101,6 +135,7 @@ class MessageService:
         if testPlanUUID not in MessageService.testPlanMap:
             MessageService.testPlanMap[testPlanUUID]=ConsumerOfGraph(testPlanUUID)
         MessageService.testPlanMap[testPlanUUID].subscribe(consumerId)
+        MessageService.catchUp(testPlanUUID,consumerId)
     
     @staticmethod
     def desubscribe(consumerId,testPlanUUID):
@@ -115,8 +150,27 @@ class MessageService:
         # 追加消息
         MessageContainer.append(Message(testPlanUUID,messageBody))
         # 通知向所有testPlanUUID的订阅者发送数据
-        MessageService.checkAndSend(testPlanUUID)
+        MessageService.catchUp(testPlanUUID)
     
     @staticmethod
-    def checkAndSend(testPlanUUID:uuid.UUID):
-        pass
+    def consumeAck(testPlanUUID,sid):
+        print('consumeAck {} {}'.format(testPlanUUID,sid))
+        MessageService.testPlanMap[testPlanUUID].consumeAck(id)
+        MessageService.consumerMap[sid].consumeAck(testPlanUUID)
+
+    @staticmethod
+    def catchUp(testPlanUUID:uuid.UUID,consumerId=None):
+        consumerIds = dict()
+        if consumerId:
+            consumerIds[consumerId]=MessageService.testPlanMap[testPlanUUID].getIndex(consumerId)
+        else:
+            consumerIds = MessageService.testPlanMap[testPlanUUID].getAllIndex()
+        # 推送
+        for id in consumerIds:
+            print('catch up for consumer: {} testPlan: {}'.format(id,testPlanUUID))
+            for msg in MessageContainer.getMessages(testPlanUUID,consumerIds[id]):
+                print('send msg : {} {}'.format(msg.messageBody.msgType,msg.messageBody))
+                MessageService.socket.emit(msg.messageBody.msgType,msg.messageBody
+                                           ,namespace=MessageService.namespace
+                                           ,to=id
+                                           ,callback=MessageService.consumeAck(testPlanUUID,id))

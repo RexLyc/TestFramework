@@ -4,7 +4,7 @@ import * as tn from '@/TestNode';
 import { ElNotification, uploadBaseProps } from 'element-plus'
 import { onMounted, ref, watch, getCurrentInstance, nextTick, onBeforeUnmount } from 'vue';
 import { ElTable } from 'element-plus';
-import { HttpUtil, SocketIOUtil, CommonMessageType, CommonMessage} from '@/Webutils';
+import { HttpUtil, SocketIOUtil, CommonMessageType, CommonMessage,SubmitResultType,ExitStateEnum,TestCommandType,TestCommand} from '@/Webutils';
 import { toNumber } from 'lodash';
 
 enum GraphRunStateEnum {
@@ -16,6 +16,9 @@ enum GraphRunStateEnum {
   FAILED        = '测试失败',
   EXCEPTION     = '测试异常',
   INCOMPATIBLE  = '不兼容',
+  KILLED        = '强制结束',
+  TIMEOUT       = '超时',
+  INVALID       = '无效'
 }
 
 enum ServerLinkStateEnum {
@@ -64,6 +67,7 @@ class ServerInfo{
   runState    :GraphRunStateEnum;
   log         :string;
   isReleased  :boolean;
+  testUUID    :string;
   constructor(name:string,address:string,link:ServerLinkStateEnum,runState:GraphRunStateEnum,log:string){
     this.name=name;
     this.address=address;
@@ -71,6 +75,7 @@ class ServerInfo{
     this.runState=runState;
     this.log=log;
     this.isReleased=false;
+    this.testUUID="";
   }
 
   socketConnect() {
@@ -78,7 +83,8 @@ class ServerInfo{
         // onOpen
       , (message:any)=>{
         console.log("onOpen",message)
-        SocketIOUtil.send(this.address,new CommonMessage(ServiceCommandEnum.PING,{}))
+        console.log("%o",this)
+        SocketIOUtil.send(this.address,new CommonMessage(CommonMessageType.PING,{}))
       }
         // onClose
       , (message:any)=>{
@@ -97,6 +103,77 @@ class ServerInfo{
         [CommonMessageType.PING.toString(),(message:any)=>{
           console.log("ping message: %o",message)
           this.link=ServerLinkStateEnum.WAITING;
+        }],
+        [CommonMessageType.SUBMIT.toString(),(message:any)=>{
+          console.log("submit message: %o",message)
+          switch(message.msgData.result){
+            case SubmitResultType.SUCCESS:{
+              this.runState=GraphRunStateEnum.RUNNING;
+              break;
+            }
+            case SubmitResultType.INCOMPATIBLE:{
+              this.runState=GraphRunStateEnum.INCOMPATIBLE;
+              break;
+            }
+            case SubmitResultType.EXCEPTION:{
+              this.runState=GraphRunStateEnum.EXCEPTION;
+              break;
+            }
+            default:{
+              this.runState=GraphRunStateEnum.UNKNOWN;
+              break;
+            }
+          }
+          this.log = message.msgData.message
+          this.testUUID=message.msgData.testUUID;
+        }],
+        [CommonMessageType.TEST_RESULT.toString(),(message:CommonMessage)=>{
+          console.log('test result message: %o',message)
+          switch(message.msgData.exitState){
+            case ExitStateEnum.EXCEPTION:{
+              this.runState = GraphRunStateEnum.EXCEPTION;
+              break;
+            }
+            case ExitStateEnum.INVALID:{
+              this.runState = GraphRunStateEnum.INVALID;
+              break;
+            }
+            case ExitStateEnum.SUCCESS:{
+              this.runState = GraphRunStateEnum.SUCCESS;
+              break;
+            }
+            case ExitStateEnum.TIMEOUT:{
+              this.runState = GraphRunStateEnum.TIMEOUT;
+              break;
+            }
+            case ExitStateEnum.KILLED:{
+              this.runState = GraphRunStateEnum.KILLED;
+              break;
+            }
+            case ExitStateEnum.TESTERROR:{
+              this.runState = GraphRunStateEnum.FAILED;
+              break;
+            }
+          }
+          this.log=message.msgData.log
+        }],
+        [CommonMessageType.TEST_COMMAND.toString(),(message:CommonMessage)=>{
+          console.log('test result message: %o',message)
+          if(message.msgData.result==true){
+            ElNotification.success({
+              title: '注意',
+              message: '控制成功',
+              showClose: false,
+              duration: 1000
+            })
+          } else {
+            ElNotification.error({
+              title: '注意',
+              message: '控制失败: '+message.msgData.message,
+              showClose: false,
+              duration: 1000
+            })
+          }
         }]
       ])
     )
@@ -112,67 +189,25 @@ class ServerInfo{
   updateLink(){
     this.link = ServerLinkStateEnum.OFFLINE;
     this.socketConnect();
-    // HttpUtil.linkTest(this.address
-    //   ,tn.TestGraphFactory.exportGraph(graphName)
-    //   ,(resp:any)=>{
-    //     if(resp.status===200){
-    //       // success run over 
-    //       const commonResp = new CommonResponse(resp.data.code,{});
-    //       if(commonResp.code===CommonResponseEnum.BUSY)
-    //         this.link=ServerLinkStateEnum.BUSY;
-    //       else if(commonResp.code===CommonResponseEnum.SUCCESS)
-    //         this.link=ServerLinkStateEnum.WAITING;
-    //       else if(commonResp.code===CommonResponseEnum.EXCEPTION)
-    //         this.link=ServerLinkStateEnum.EXCEPTION;
-    //     } else {
-    //       this.link = ServerLinkStateEnum.EXCEPTION;
-    //     }
-    //   }
-    //   ,(error:any)=>{
-    //     console.log(error);
-    //     if(error.response==null || error.response.status===404)
-    //       this.link = ServerLinkStateEnum.OFFLINE;
-    //     else
-    //       this.link = ServerLinkStateEnum.EXCEPTION;
-    //   });
   }
 
   updateRunState(graphName:string){
-    HttpUtil.runTestGraph(this.address
-      ,tn.TestGraphFactory.exportGraph(graphName)
-      ,(resp:any) => {
-        if(resp.status===200){
-          // success run over
-          const runResult = new CommonResponse<RunResult>(resp.data.code
-          ,new RunResult(resp.data.data.timeElapsed,resp.data.data.log));
-          if(runResult.code==CommonResponseEnum.SUCCESS){
-            this.runState = GraphRunStateEnum.SUCCESS;
-          } else if(runResult.code==CommonResponseEnum.EXCEPTION){
-            this.runState = GraphRunStateEnum.EXCEPTION;
-          } else if(runResult.code==CommonResponseEnum.INCOMPATIBLE){
-            this.runState = GraphRunStateEnum.INCOMPATIBLE;
-          } else if(runResult.code==CommonResponseEnum.FAILED){
-            this.runState = GraphRunStateEnum.FAILED;
-          }
-          this.log = runResult.data.log;
-        } else {
-          this.log = resp.statusText;
-          this.runState = GraphRunStateEnum.EXCEPTION;
-        }
-      }
-      ,(error:any) => {
-        this.log = error;
-        this.runState = GraphRunStateEnum.EXCEPTION;
-      });
+    // TODO: 保存旧测试计划
+    this.testUUID="";
+    SocketIOUtil.send(this.address,new CommonMessage(CommonMessageType.SUBMIT,tn.TestGraphFactory.exportGraph(graphName)))
   }
 
   updateLog(graphName:string){
-    // 获取完整日志
+    // TODO: 获取完整日志
   }
 
   release(){
     this.isReleased=true;
     this.socketDisconnect();
+  }
+
+  sendCommand(commandType: TestCommandType){
+    SocketIOUtil.send(this.address,new CommonMessage(CommonMessageType.TEST_COMMAND,new TestCommand(this.testUUID,commandType)))
   }
 }
 
@@ -274,6 +309,20 @@ const runAllTest = ()=>{
   }
 }
 
+const stopAllTest = ()=>{
+  if(multipleSelection.value.length==0){
+    ElNotification.error({
+      title: '注意',
+      message: '请选择要停止测试的服务器',
+      showClose: false,
+      duration: 1000
+    })
+  }
+  for(let server of multipleSelection.value){
+    server.sendCommand(TestCommandType.KILL);
+  }
+}
+
 const selectFilterValue = ref('')
 const selectFilter = (val:any)=>{
   // console.log('filter: %o',val);
@@ -315,7 +364,6 @@ const handleRowClick = (row:any,column:any,event:any)=>{
     multipleTableRef.value?.toggleRowSelection(row,true);
   }
 }
-
 const logDownload=(row:any)=>{
   ElNotification.error({
       title: '注意',
@@ -351,6 +399,7 @@ const logDownload=(row:any)=>{
           </el-select>
           <el-button @click="addTestServer" type="primary">添加</el-button>
           <el-button @click="runAllTest" type="success">执行测试</el-button>
+          <el-button @click="stopAllTest" type="warning">停止测试</el-button>
           <el-button @click="logDownload" type="info">获取日志</el-button>
         </el-space>
         <el-button @click="handleDelete" type="danger" style="position:absolute;right: 0px;"><el-icon><Delete/></el-icon></el-button>
@@ -365,22 +414,27 @@ const logDownload=(row:any)=>{
           <el-table-column label="连接状态" min-width="50px">
             <template #default="scope">
               <el-tag v-if="scope.row.link==ServerLinkStateEnum.WAITING" effect="dark" size="large" type="success">{{ scope.row.link }}</el-tag>
-              <el-tag v-if="scope.row.link==ServerLinkStateEnum.UNKNOWN" effect="dark" size="large" type="info">{{ scope.row.link }}</el-tag>
-              <el-tag v-if="scope.row.link==ServerLinkStateEnum.BUSY" effect="dark" size="large" type="warning">{{ scope.row.link }}</el-tag>
-              <el-tag v-if="scope.row.link==ServerLinkStateEnum.OFFLINE
+              <el-tag v-else-if="scope.row.link==ServerLinkStateEnum.UNKNOWN" effect="dark" size="large" type="info">{{ scope.row.link }}</el-tag>
+              <el-tag v-else-if="scope.row.link==ServerLinkStateEnum.BUSY" effect="dark" size="large" type="warning">{{ scope.row.link }}</el-tag>
+              <el-tag v-else-if="scope.row.link==ServerLinkStateEnum.OFFLINE
                               ||scope.row.link==ServerLinkStateEnum.EXCEPTION" effect="dark" size="large" type="danger">{{ scope.row.link }}</el-tag>
+              <el-tag v-else effect="dark" size="large" type="info">{{ scope.row.runState }}</el-tag>
             </template>
           </el-table-column>
           
           <el-table-column label="运行状态" min-width="50px">
             <template #default="scope">
-              <el-tag v-if="scope.row.runState==GraphRunStateEnum.WAITING
+              <el-tag v-if="scope.row.runState==GraphRunStateEnum.RUNNING" effect="dark" size="large" type="warning">{{ scope.row.runState }}</el-tag>
+              <el-tag v-else-if="scope.row.runState==GraphRunStateEnum.WAITING
                               ||scope.row.runState==GraphRunStateEnum.PREPARING" effect="dark" size="large">{{ scope.row.runState }}</el-tag>
-              <el-tag v-if="scope.row.runState==GraphRunStateEnum.SUCCESS" effect="dark" size="large" type="success">{{ scope.row.runState }}</el-tag>
-              <el-tag v-if="scope.row.runState==GraphRunStateEnum.UNKNOWN" effect="dark" size="large" type="info">{{ scope.row.runState }}</el-tag>
-              <el-tag v-if="scope.row.runState==GraphRunStateEnum.FAILED
+              <el-tag v-else-if="scope.row.runState==GraphRunStateEnum.SUCCESS" effect="dark" size="large" type="success">{{ scope.row.runState }}</el-tag>
+              <el-tag v-else-if="scope.row.runState==GraphRunStateEnum.UNKNOWN" effect="dark" size="large" type="info">{{ scope.row.runState }}</el-tag>
+              <el-tag v-else-if="scope.row.runState==GraphRunStateEnum.FAILED
                               ||scope.row.runState==GraphRunStateEnum.INCOMPATIBLE
+                              ||scope.row.runState==GraphRunStateEnum.TIMEOUT
+                              ||scope.row.runState==GraphRunStateEnum.INVALID
                               ||scope.row.runState==GraphRunStateEnum.EXCEPTION" effect="dark" size="large" type="danger">{{ scope.row.runState }}</el-tag>
+              <el-tag v-else effect="dark" size="large" type="info">{{ scope.row.runState }}</el-tag>
             </template>
           </el-table-column>
           

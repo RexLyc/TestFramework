@@ -1,22 +1,55 @@
 from graph.Component import TestPlanFactory,TestExecutor,TestIncompatibleError,TestRuntimeError,TestError,RunResult
-from MessageService import *
+from .MessageService import *
+
+class SubmitResultType(Enum):
+    SUCCESS      = 0
+    INCOMPATIBLE = 1
+    EXCEPTION    = 2
+
+class SubmitResponse(dict):
+    def __init__(self,submitResult:SubmitResultType,testUUID:uuid.UUID=None,message=None) -> None:
+        self.result=submitResult
+        self.testUUID=testUUID.hex
+        self.message=message
+        dict.__init__(self,result=self.result.value,testUUID=self.testUUID,message=self.message)
 
 class TestService:
     @staticmethod
-    def getTestResult(jsonQuery):
+    def _task_done(future,testPlanUUID):
+        MessageService.appendMessage(testPlanUUID,MessageBody(MessageType.TEST_RESULT,future.result()))
+
+    @staticmethod
+    def getTestResult(testUUID,sid):
         pass
 
     @staticmethod
-    def getTestState(jsonQuery):
+    def getTestState(testUUID,sid):
         pass
 
     @staticmethod
-    def submit(jsonGraph):
+    def setTestCommand(command,sid):
+        print('recv command from sid: {} testUUID: {} command: {}'.format(sid,command['testUUID'],command['command']))
+        result = False
+        message = ""
         try:
-            testPlan = TestPlanFactory.buildTestPlan(jsonData=jsonGraph)
-            TestExecutor.submitTestTask(testPlan, )
-            return CommonMessage(CommonMessageType.SUBMIT.value,msgData=)
+            (result,message) = TestExecutor.controlTestTask(sid,uuid.UUID(hex=command['testUUID']),command['command'])
+        except Exception or RuntimeError as err:
+            print(err)
+            message = "{}".format(err)
+            print('control failed: ',message)
+        return MessageBody(msgType=MessageType.TEST_COMMAND,msgData={"result":result,"message":message})
+
+    @staticmethod
+    def submit(jsonGraph,sid):
+        try:
+            # 创建sid和testPlan的绑定
+            testPlan = TestPlanFactory.buildTestPlan(jsonGraph)
+            MessageService.subscribe(sid,testPlan.planUUID)
+            TestExecutor.submitTestTask(testPlan, lambda future:TestService._task_done(future,testPlan.planUUID))
+            return MessageBody(msgType=MessageType.SUBMIT,msgData=SubmitResponse(SubmitResultType.SUCCESS,testPlan.planUUID,'test running...'))
         except TestIncompatibleError as err:
-            return CommonResponse(CommonResponseEnum.INCOMPATIBLE.value,RunResult(0,'{}'.format(err)))
+            print('submit TestIncompatibleError {}'.format(err))
+            return MessageBody(msgType=MessageType.SUBMIT,msgData=SubmitResponse(SubmitResultType.INCOMPATIBLE,message='{}'.format(err)))
         except Exception as err:
-            return CommonResponse(CommonResponseEnum.EXCEPTION.value,RunResult(0,'{}'.format(err)))
+            print('submit Exception {}'.format(err))
+            return MessageBody(msgType=MessageType.SUBMIT,msgData=SubmitResponse(SubmitResultType.EXCEPTION,message='{}'.format(err)))

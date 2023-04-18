@@ -906,6 +906,28 @@ export class BarrierNode {
     }
 }
 
+// 等待节点，用于提供sleep
+export class SleepNode {
+    static categoryName = CategoryEnums.CommonType;
+    static typeName = "SleepNode";
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(FlowParam,"prev");
+        inputs.addParam(VariableParam,"time");
+        const outputs = new InOutParams();
+        outputs.addParam(FlowParam,"next");
+        const temp = new BaseNode(nodeName
+            ,inputs
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,SleepNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
+
 // ====================== 实用工具 ====================== 
 // 默认翻译
 export const basicNodeTranslate:Map<string,string> = new Map();
@@ -1120,6 +1142,7 @@ basicNodeTranslate.set("NotNode","逻辑非节点");
 
 // 其他流程控制
 basicNodeTranslate.set("BarrierNode","栅栏节点")
+basicNodeTranslate.set("SleepNode","睡眠节点")
 
 
 NodeFactory.loadNodeLibrary(BeginNode);
@@ -1148,5 +1171,5 @@ NodeFactory.loadNodeLibrary(AndNode);
 NodeFactory.loadNodeLibrary(OrNode);
 NodeFactory.loadNodeLibrary(NotNode);
 NodeFactory.loadNodeLibrary(BarrierNode);
-
 NodeFactory.loadNodeLibrary(VariableNode);
+NodeFactory.loadNodeLibrary(SleepNode);

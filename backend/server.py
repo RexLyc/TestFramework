@@ -3,10 +3,10 @@ from service.TestService import TestService
 import json
 from flask_cors import *
 from graph.Component import RunResult
-from service.TestService import CommonMessageType
+from service.TestService import MessageType
 # from service.WebSocketService import WebSocketService
 from flask_socketio import SocketIO, emit,join_room,leave_room
-
+from service.MessageService import MessageService,MessageType
 import time
 
 app = Flask('test-framework-backend')
@@ -14,7 +14,8 @@ app = Flask('test-framework-backend')
 # CORS(app,supports_credentials=True,resources=r'/*')
 
 # 为socket io 添加cors支持
-socketio = SocketIO(app,cors_allowed_origins='*')
+# 为跨线程socketio添加async_mode支持
+socketio = SocketIO(app,cors_allowed_origins='*',async_mode='threading')
 
 # def buildBaseResp():
 #     resp = Response(status=200)
@@ -58,7 +59,7 @@ ws_namespace = '/websocket'
 @socketio.on(message='connect',namespace=ws_namespace)
 def on_connect(message):
     print("client connected. {}".format(request.sid))
-    socketio.emit('connect', {'data': 'connect'},namespace=ws_namespace)
+    # socketio.emit('connect', {'data': 'connect'},namespace=ws_namespace)
 
 # 连接断开处理
 @socketio.on('disconnect', namespace=ws_namespace)
@@ -72,30 +73,38 @@ def on_error():
 
 # ==================================== 自定义消息 ====================================
 # 心跳
-@socketio.on(CommonMessageType.PING.value, namespace=ws_namespace)
+@socketio.on(MessageType.PING.value, namespace=ws_namespace)
 def on_ping(message):
     print('client ping')
-    emit('ping', {}, namespace = ws_namespace)
+    print(socketio)
+    emit(MessageType.PING.value, {}, namespace = ws_namespace)
 
 # 提交测试图
-@socketio.on(CommonMessageType.SUBMIT.value,namespace=ws_namespace)
+@socketio.on(MessageType.SUBMIT.value,namespace=ws_namespace)
 def on_submit(message):
     print('get test graph submit {}'.format(message))
-    result = TestService.submit(request.get_data(),request.sid)
-    emit(CommonMessageType.SUBMIT.value,result,to=request.sid)
+    result = TestService.submit(message['msgData'],request.sid)
+    emit(MessageType.SUBMIT.value,result,to=request.sid)
 
-@socketio.on(CommonMessageType.TEST_RESULT.value,namespace=ws_namespace)
+@socketio.on(MessageType.TEST_RESULT.value,namespace=ws_namespace)
 def on_test_result(message):
-    print('query test result {}'.format(message))
-    result = TestService.getTestResult(request.get_data())
-    emit(CommonMessageType.TEST_RESULT.value,result,to=request.sid)
+    print('query test result {}'.format(message['msgData']))
+    result = TestService.getTestResult(message,request.sid)
+    emit(MessageType.TEST_RESULT.value,result,to=request.sid)
 
-@socketio.on(CommonMessageType.TEST_STATE.value,namespace=ws_namespace)
+@socketio.on(MessageType.TEST_STATE.value,namespace=ws_namespace)
 def on_test_state(message):
     print('query test state {}'.format(message))
-    result = TestService.getTestState(request.get_data())
-    emit(CommonMessageType.TEST_STATE.value,result,to=request.sid)
+    result = TestService.getTestState(message['msgData'],request.sid)
+    emit(MessageType.TEST_STATE.value,result,to=request.sid)
+
+@socketio.on(MessageType.TEST_COMMAND.value,namespace=ws_namespace)
+def on_test_command(message):
+    print('command test {}'.format(message))
+    result = TestService.setTestCommand(message['msgData'],request.sid)
+    emit(MessageType.TEST_COMMAND.value,result,to=request.sid)
 
 if __name__ == '__main__':
     # app.run(debug=True)
+    MessageService.initSocket(socketio,ws_namespace)
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)
