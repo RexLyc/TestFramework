@@ -1,14 +1,25 @@
-from flask import Flask, request, Response
-from service.TestService import TestService
-import json
+# flask依赖
+from flask import Flask, request, Response, g
 from flask_cors import *
-from graph.Component import RunResult
-from service.TestService import MessageType
-# from service.WebSocketService import WebSocketService
-from flask_socketio import SocketIO, emit,join_room,leave_room
+from flask_socketio import SocketIO, emit
+# 其他依赖库
+import json
+import sqlite3
+# 服务导入
+from service.TestService import TestService
+from service.SaveService import SaveService,SaveResponse,SaveResponseType
 from service.MessageService import MessageService,MessageType
-import time
 
+# ==================================== 工具函数 ====================================
+def buildBaseResp():
+    resp = Response(status=200)
+    resp.headers['Access-Control-Allow-Origin']='*'
+    resp.headers['Access-Control-Allow-Methods']='OPTIONS,HEAD,GET,POST'
+    resp.headers['Access-Control-Allow-Headers']='x-requested-with'
+    return resp
+
+
+# ==================================== 框架实例创建 ====================================
 app = Flask('test-framework-backend')
 # 为http添加cors支持
 # CORS(app,supports_credentials=True,resources=r'/*')
@@ -17,43 +28,30 @@ app = Flask('test-framework-backend')
 # 为跨线程socketio添加async_mode支持
 socketio = SocketIO(app,cors_allowed_origins='*',async_mode='threading')
 
-# def buildBaseResp():
-#     resp = Response(status=200)
-#     resp.headers['Access-Control-Allow-Origin']='*'
-#     resp.headers['Access-Control-Allow-Methods']='OPTIONS,HEAD,GET,POST'
-#     resp.headers['Access-Control-Allow-Headers']='x-requested-with'
-#     return resp
+# ==================================== HTTP请求 ====================================
 
-# @app.route('/hello',methods=['post'])
-# def hello():
-#     print(request.data)
-#     return 'greetings from backed.'
-
-# @app.route('/runTestGraph',methods=['post'])
-# def runTestGraph():
-#     print(runTestGraph.__name__+' begin')
-#     resp = buildBaseResp()
-#     # 必须添加异常处理，否则会无法返回CORS
-#     try:
-#         resp.data = json.dumps(TestService.run(request.get_data()))
-#     except Exception as err:
-#         resp.data = json.dumps(CommonResponse(CommonResponseEnum.EXCEPTION.value,RunResult(0,'{}'.format(err))))
-#     return resp
-
-# @app.route('/linkTest',methods=['post'])
-# def runLinkTest():
-#     resp = buildBaseResp()
-#     # 必须添加异常处理，否则会无法返回CORS
-#     try:
-#         resp.data = json.dumps(TestService.linkTest(request.get_data()))
-#     except Exception as err:
-#         resp.data = json.dumps(CommonResponse(CommonResponseEnum.EXCEPTION.value))
-#     print(resp.data)
-#     return resp
+@app.route('/serverSave',methods=['post'])
+def getServerSave():
+    resp = buildBaseResp()
+    # 必须添加异常处理，否则会无法返回CORS
+    try:
+        jsonData = request.get_data()
+        print('get serverSave query: {}'.format(jsonData))
+        query = json.loads(jsonData)
+        print(query)
+        name = None
+        if name is None:
+            # 返回整体信息列表
+            resp.data = json.dumps(SaveResponse(SaveResponseType.SUCCESS,SaveService.getAllSaveInfo()))
+        else:
+            # 返回指定名称的存档文件
+            resp.data = SaveService.getSave(name)
+    except Exception as err:
+        resp.data = json.dumps(SaveResponse(SaveResponseType.EXCEPTION,'{}'.format(err)))
+    print(resp)
+    return resp
 
 ws_namespace = '/websocket'
-
-
 # ==================================== 基础消息 ====================================
 # 连接处理
 @socketio.on(message='connect',namespace=ws_namespace)
