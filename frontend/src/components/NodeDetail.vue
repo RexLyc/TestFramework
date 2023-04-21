@@ -28,7 +28,10 @@ const setFormNode = ()=>{
     form.value=tn.TestGraphFactory.getTestGraph(props.graphName).nameNodeMap.get(props.nodeName)!;
     if(form.value.typeName==tn.ConstantNode.name||form.value.typeName==tn.VariableNode.name){
       paramCount.value=form.value.outputs.params.length;
+    } else {
+      paramCount.value=form.value.outputs.params.length-1;
     }
+    
   }
 }
 
@@ -57,6 +60,15 @@ const countChange = ()=>{
       form.value.inputs.pop()
       form.value.outputs.pop()
     }
+  } else if(form.value.typeName==tn.ModuleBeginNode.name||form.value.typeName==tn.ModuleEndNode.name){
+    while(paramCount.value + 1>form.value.outputs.params.length){
+      form.value.inputs.addParam(tn.VariableParam,'data_'+form.value.outputs.params.length,tn.ParamRuntimeTypeEnums.VarNameValue);
+      form.value.outputs.addParam(tn.VariableParam,'data_'+form.value.outputs.params.length,tn.ParamRuntimeTypeEnums.VarNameValue);
+    }
+    while(paramCount.value + 1<form.value.outputs.params.length){
+      form.value.inputs.pop()
+      form.value.outputs.pop()
+    }
   }
   const updateEvent = new CustomEvent('dataNodeChanged',{detail:{graphName:props.graphName,nodeName:props.nodeName}});
   dispatchEvent(updateEvent);
@@ -70,20 +82,16 @@ const countChange = ()=>{
       <el-form-item label="节点名称">
         <el-input  v-model="form.html" @input="dataChanged"/>
       </el-form-item>
-      <!--
-      <el-form-item label="输入参数">
-        <el-table :data="form.inputs.params" style="width: 100%">
-          <el-table-column prop="paramName" label="参数名称"/>
-          <el-table-column prop="paramType" label="参数动态类型" />
-          <el-table-column prop="paramRef" label="参数引用" />
-          <el-table-column prop="paramValue" label="参数值"/>
-        </el-table>
-      </el-form-item>
-      -->
-      <!-- ConstantNode专用，注意禁止引用类型参数 -->
-      <el-form-item label="可变参数数量" v-if="form.typeName==tn.ConstantNode.name ||form.typeName==tn.SwitchNode.name">
+
+      <!-- 可变参数类型节点，数量修改 -->
+      <el-form-item label="可变参数数量" v-if="form.typeName==tn.ConstantNode.name 
+                                            || form.typeName==tn.SwitchNode.name 
+                                            || form.typeName==tn.ModuleBeginNode.name
+                                            || form.typeName==tn.ModuleEndNode.name">
         <el-input-number v-model="paramCount" :max="5" :min="minCount" @change="countChange"></el-input-number>
       </el-form-item>
+
+      <!-- ============ 常量、变量节点 ============ -->
       <el-form-item label="输出参数" v-if="form.typeName && form.typeName==tn.ConstantNode.name || form.typeName==tn.VariableNode.name">
         <el-table :data="form.outputs.params" style="width: 100%">
           <el-table-column label="参数名称">
@@ -109,9 +117,9 @@ const countChange = ()=>{
           </el-table-column>
         </el-table>
       </el-form-item>
+      <!-- ============ 常量、变量节点 ============ -->
 
-      <!-- SwitchNode专用，用于添加case -->
-
+      <!-- ============ Switch节点 ============ -->
       <el-form-item label="分支用例" v-if="form.typeName && form.typeName==tn.SwitchNode.name">
         <el-table :data="form.inputs.params.slice(2)" style="width: 100%" >
           <el-table-column label="分支用例名称" >
@@ -121,14 +129,6 @@ const countChange = ()=>{
               </template>
             </template>
           </el-table-column>
-
-          <!--
-          <el-table-column label="操作">
-            <template #default="scope">
-              <el-button @click="handleDeleteCase(scope.row,scope.index)"><el-icon><Delete/></el-icon></el-button>
-            </template>
-          </el-table-column>
-          -->
         </el-table>
       </el-form-item>
 
@@ -139,16 +139,31 @@ const countChange = ()=>{
               <el-input v-model="scope.row.paramName" :value="scope.row.paramName" @input="dataChanged"></el-input>
             </template>
           </el-table-column>
-          
-          <!--
-          <el-table-column label="操作">
-            <template #default="scope">
-              <el-button @click="handleDeleteCase(scope.row,scope.index)"><el-icon><Delete/></el-icon></el-button>
-            </template>
-          </el-table-column>
-          -->
         </el-table>
       </el-form-item>
+      <!-- ============ Switch节点 ============ -->
+
+      <!-- ============ 模块起始终止节点 ============ -->
+      <el-form-item label="模块输入" v-if="form.typeName && form.typeName==tn.ModuleBeginNode.name">
+        <el-table :data="form.outputs.params.slice(1)" style="width: 100%" >
+          <el-table-column label="输入参数名称">
+            <template #default="scope">
+              <el-input v-model="scope.row.paramName" :value="scope.row.paramName" @input="dataChanged"></el-input>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-form-item>
+      
+      <el-form-item label="模块输出" v-if="form.typeName && form.typeName==tn.ModuleEndNode.name">
+        <el-table :data="form.outputs.params.slice(1)" style="width: 100%" >
+          <el-table-column label="输出参数名称">
+            <template #default="scope">
+              <el-input v-model="scope.row.paramName" :value="scope.row.paramName" @input="dataChanged"></el-input>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-form-item>
+      <!-- ============ 模块起始终止节点 ============ -->
     </el-form>
   </div>
 </template>

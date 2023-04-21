@@ -1,7 +1,7 @@
 import axios from 'axios';
 export class HttpUtil {
-    private static sendPost(url:string,body:string,onResp:any,onError:any){
-        return axios.post(import.meta.env.VITE_APP_BASE+url,body).then(onResp).catch(onError);
+    private static sendPost(url:string,body:any,onResp:any,onError:any){
+        return axios.post(import.meta.env.VITE_APP_BASE+url,JSON.stringify(body)).then(onResp).catch(onError);
     }
     // static runTestGraph(address:string,graphJson:string,onResp:any,onError:any){
     //     return this.sendPost(address+'/runTestGraph'
@@ -16,7 +16,19 @@ export class HttpUtil {
     //         , onError);
     // }
     static getSave(body:any,onResp:any,onError:any){
-        return this.sendPost('/serverSave',JSON.stringify(body),onResp,onError)
+        return this.sendPost('/serverSave',body,onResp,onError)
+    }
+
+    static getSaveTypeCategory(onResp:any,onError:any){
+        return this.sendPost('/saveCategory',{},onResp,onError);
+    }
+
+    static uploadSave(body:any,onResp:any,onError:any){
+        return this.sendPost('/uploadSave',body,onResp,onError);
+    }
+
+    static deleteSave(body:any,onResp:any,onError:any){
+        return this.sendPost('/deleteSave',body,onResp,onError);
     }
 }
 

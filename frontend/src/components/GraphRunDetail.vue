@@ -163,15 +163,15 @@ class ServerInfo{
             ElNotification.success({
               title: '注意',
               message: '控制成功',
-              showClose: false,
-              duration: 1000
+              showClose: true,
+              duration: 5000
             })
           } else {
             ElNotification.error({
               title: '注意',
               message: '控制失败: '+message.msgData.message,
-              showClose: false,
-              duration: 1000
+              showClose: true,
+              duration: 5000
             })
           }
         }]
@@ -274,8 +274,8 @@ const addTestServer = ()=>{
     ElNotification.error({
       title: '注意',
       message: '请输入 IP地址:端口',
-      showClose: false,
-      duration: 1000
+      showClose: true,
+      duration: 5000
     })
     return;
   }
@@ -283,8 +283,8 @@ const addTestServer = ()=>{
     ElNotification.warning({
       title: '注意',
       message: '已有该地址测试服务器',
-      showClose: false,
-      duration: 1000
+      showClose: true,
+      duration: 5000
     })
     return;
   }  
@@ -300,8 +300,8 @@ const runAllTest = ()=>{
     ElNotification.error({
       title: '注意',
       message: '请选择要运行测试的服务器',
-      showClose: false,
-      duration: 1000
+      showClose: true,
+      duration: 5000
     })
   }
   for(let server of multipleSelection.value){
@@ -314,8 +314,8 @@ const stopAllTest = ()=>{
     ElNotification.error({
       title: '注意',
       message: '请选择要停止测试的服务器',
-      showClose: false,
-      duration: 1000
+      showClose: true,
+      duration: 5000
     })
   }
   for(let server of multipleSelection.value){
@@ -368,8 +368,8 @@ const logDownload=(row:any)=>{
   ElNotification.error({
       title: '注意',
       message: '尚未实装',
-      showClose: false,
-      duration: 1000
+      showClose: true,
+      duration: 5000
     })
 }
 </script>

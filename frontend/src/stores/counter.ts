@@ -20,3 +20,24 @@ export const usePressElementStore = defineStore('currentPressedElement',()=>{
 
   return {currentPressedElement,setCurrent}
 })
+
+export const useGraphNameStore = defineStore('currentGraphName',()=>{
+  const currentGraphName = ref()
+  function setCurrent(name:string) {
+    currentGraphName.value = name;
+  }
+
+  return {currentGraphName,setCurrent}
+})
+
+export const useFlowModeStore = defineStore('currentFlowMode',()=>{
+  const currentFlowMode = ref()
+  function setCurrent(name:string) {
+    if(name!=='graph'&&name!=='module'){
+      throw Error('invalid mode');
+    }
+    currentFlowMode.value = name;
+  }
+
+  return {currentFlowMode,setCurrent}
+})

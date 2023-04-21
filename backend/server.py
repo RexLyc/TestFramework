@@ -38,21 +38,64 @@ def getServerSave():
         jsonData = request.get_data()
         print('get serverSave query: {}'.format(jsonData))
         query = json.loads(jsonData)
-        print(query)
-        name = None
-        if name is None:
+        print('get query {}'.format(query))
+        if query is None or len(list(query))==0:
             # 返回整体信息列表
-            resp.data = json.dumps(SaveResponse(SaveResponseType.SUCCESS,SaveService.getAllSaveInfo()))
+            resp.data = json.dumps(SaveService.getAllSaveInfo())
         else:
             # 返回指定名称的存档文件
-            resp.data = SaveService.getSave(name)
+            resp.data = json.dumps(SaveService.getSave(query))
     except Exception as err:
         resp.data = json.dumps(SaveResponse(SaveResponseType.EXCEPTION,'{}'.format(err)))
     print(resp)
     return resp
 
-ws_namespace = '/websocket'
+@app.route('/saveCategory',methods=['post'])
+def getCategory():
+    resp = buildBaseResp()
+    try:
+        resp.data = json.dumps(SaveResponse(SaveResponseType.SUCCESS,SaveService.getCategory()))
+    except Exception as err:
+        resp.data = json.dumps(SaveResponse(SaveResponseType.EXCEPTION,'{}'.format(err)))
+    print(resp)
+    return resp
+
+@app.route('/uploadSave',methods=['post'])
+def uploadSave():
+    resp = buildBaseResp()
+    try:
+        jsonData = request.get_data()
+        print('get serverSave query: {}'.format(jsonData))
+        saveParam = json.loads(jsonData)
+        print(saveParam)
+        resp.data = json.dumps(SaveService.addSave(saveParam['form']['save_name']
+                                                   ,saveParam['form']['typeValue']
+                                                   ,saveParam['form']['categoryValue']
+                                                   ,saveParam['form']['description']
+                                                   ,saveParam['data']))
+    except Exception as err:
+        print(type(err))
+        resp.data = json.dumps(SaveResponse(SaveResponseType.EXCEPTION,'{}'.format(err)))
+    print(resp)
+    return resp
+
+@app.route('/deleteSave',methods=['post'])
+def deleteSave():
+    resp = buildBaseResp()
+    try:
+        jsonData = request.get_data()
+        print('get serverSave query: {}'.format(jsonData))
+        deleteNames = json.loads(jsonData)
+        print(deleteNames)
+        SaveService.deleteSave(deleteNames)
+        resp.data = json.dumps(SaveResponse(SaveResponseType.SUCCESS))
+    except Exception as err:
+        resp.data = json.dumps(SaveResponse(SaveResponseType.EXCEPTION,'{}'.format(err)))
+    print(resp)
+    return resp
+
 # ==================================== 基础消息 ====================================
+ws_namespace = '/websocket'
 # 连接处理
 @socketio.on(message='connect',namespace=ws_namespace)
 def on_connect(message):
@@ -105,4 +148,5 @@ def on_test_command(message):
 if __name__ == '__main__':
     # app.run(debug=True)
     MessageService.initSocket(socketio,ws_namespace)
+    SaveService.init()
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)

@@ -9,7 +9,10 @@ class SubmitResultType(Enum):
 class SubmitResponse(dict):
     def __init__(self,submitResult:SubmitResultType,testUUID:uuid.UUID=None,message=None) -> None:
         self.result=submitResult
-        self.testUUID=testUUID.hex
+        if testUUID == None:
+            self.testUUID=''
+        else:
+            self.testUUID=testUUID.hex
         self.message=message
         dict.__init__(self,result=self.result.value,testUUID=self.testUUID,message=self.message)
 
@@ -44,9 +47,9 @@ class TestService:
         try:
             # 创建sid和testPlan的绑定
             testPlan = TestPlanFactory.buildTestPlan(jsonGraph)
-            MessageService.subscribe(sid,testPlan.planUUID)
-            TestExecutor.submitTestTask(testPlan, lambda future:TestService._task_done(future,testPlan.planUUID))
-            return MessageBody(msgType=MessageType.SUBMIT,msgData=SubmitResponse(SubmitResultType.SUCCESS,testPlan.planUUID,'test running...'))
+            MessageService.subscribe(sid,testPlan.testParam.testUUID)
+            TestExecutor.submitTestTask(testPlan, lambda future:TestService._task_done(future,testPlan.testParam.testUUID))
+            return MessageBody(msgType=MessageType.SUBMIT,msgData=SubmitResponse(SubmitResultType.SUCCESS,testPlan.testParam.testUUID,'test running...'))
         except TestIncompatibleError as err:
             print('submit TestIncompatibleError {}'.format(err))
             return MessageBody(msgType=MessageType.SUBMIT,msgData=SubmitResponse(SubmitResultType.INCOMPATIBLE,message='{}'.format(err)))

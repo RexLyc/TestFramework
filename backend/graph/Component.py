@@ -37,7 +37,7 @@ class RunResult(dict):
         self.log=log
         self.exitState=exitState.value
         self.testUUID=testUUID.hex
-        dict.__init__(self,timeElapsed=timeElapsed,log=log,exitState=self.exitState,testUUID=self.testUUID)
+        dict.__init__(self,timeElapsed=timeElapsed,log=self.log,exitState=self.exitState,testUUID=self.testUUID)
 
 class TestError(RuntimeError):
     def __init__(self,nodeName='global',msg='error'):
@@ -51,6 +51,9 @@ class TestRuntimeError(TestError):
     pass
 
 class TestIncompatibleError(TestError):
+    pass
+
+class TestModuleError(TestRuntimeError):
     pass
 
 
@@ -76,7 +79,7 @@ class Tools:
         print('logging {}'.format(logData))
         if '$$log' not in global_data:
             global_data['$$log'] = ''
-        global_data['$$log'] = global_data['$$log'] + '{} - {}: {}\n'.format(time.time(),loggerName,logData)
+        global_data['$$log'] = global_data['$$log'] + '{}({}): {}\n'.format(loggerName,time.time(),logData)
 
     @staticmethod
     def createTcpFile(addr,port):
@@ -155,25 +158,25 @@ class BaseNode:
     def __str__(self):
         return 'Type: {}, Id: {}'.format(self.__class__, self.name)
 
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         pass
     
     def _writeBack(self,data):
         for (outputVar,param) in self.writeBackVar.items():
             data[outputVar]=data[param]
 
-    def _post(self,data,prevNode):
+    def _post(self,data,testParam,prevNode):
         next = []
         for nextNode in self.outputs[0]['paramRef']:
             next.append(str(nextNode).partition('$')[0])
         return next
 
     # 执行运算，并返回下一个运行的节点
-    def doRun(self,data,prevNode=None):
+    def doRun(self,data,testParam=None,prevNode=None):
         try:
-            self._run(data,prevNode)
+            self._run(data,testParam,prevNode)
             self._writeBack(data)
-            return self._post(data,prevNode)
+            return self._post(data,testParam,prevNode)
         except TestError as err:
             raise err
         except Exception as err:
@@ -183,7 +186,7 @@ class BeginNode(BaseNode):
     pass
 
 class ConstantNode(BaseNode):
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         for i in range(0,len(self.outputs)):
             runType = Tools.getParamType(self.outputs[i]['paramType'])
             if runType == None:
@@ -199,17 +202,17 @@ class VariableNode(ConstantNode):
     pass
 
 class EndNode(BaseNode):
-    def _post(self,data,prevNode):
+    def _post(self,data,testParam,prevNode):
         return []
 
 class HttpNode(BaseNode):
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         url = data[self.inputs[1]['paramRef'][0]]
         method = data[self.inputs[2]['paramRef'][0]]
         data[self.name+'$1']=HttpFile(url,method)
 
 class SendNode(BaseNode):
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         file = data[self.inputs[1]['paramRef'][0]]
         rawData = data[self.inputs[2]['paramRef'][0]]
         timeout = data[self.inputs[3]['paramRef'][0]]
@@ -243,32 +246,34 @@ class SendNode(BaseNode):
         data[self.name+'$1']=result
 
 class LogNode(BaseNode):
-    def _run(self,data,prevNode):
-        logData = data[self.inputs[1]['paramRef'][0]]
+    def _run(self,data,testParam,prevNode):
+        logData = ''
+        for i in self.inputs[1]['paramRef']:
+            logData += data[i] +' '
         Tools.log(data,logData,self.name)
 
 class ExtractNode(BaseNode):
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         inputData = data[self.inputs[1]['paramRef'][0]]
         outputData = outputData = inputData[data[self.inputs[2]['paramRef'][0]]:data[self.inputs[3]['paramRef'][0]]]
         data[self.name+'$1']=outputData
 
 class MergeNode(BaseNode):
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         data_1 = data[self.inputs[1]['paramRef'][0]]
         data_2 = data[self.inputs[2]['paramRef'][0]]
         outputData = data_1 + data_2
         data[self.name+'$1']=outputData
 
 class TCPNode(BaseNode):
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         addr = data[self.inputs[1]['paramRef'][0]]
         port = data[self.inputs[2]['paramRef'][0]]
         tcpFile = TcpFile(Tools.createTcpFile(addr,port))
         data[self.name+'$1'] = tcpFile
 
 class RecvNode(BaseNode):
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         file = data[self.inputs[1]['paramRef'][0]]
         timeout = data[self.inputs[2]['paramRef'][0]] / 1000
         outputData = None
@@ -310,7 +315,7 @@ class RecvNode(BaseNode):
         data[self.name+'$1'] = outputData
 
 class WebSocketNode(BaseNode):
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         url = data[self.inputs[1]['paramRef'][0]]
         new_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(new_loop)
@@ -318,7 +323,7 @@ class WebSocketNode(BaseNode):
         data[self.name+'$1'] = outputData
 
 class IfNode(BaseNode):
-    def _post(self,data,prevNode):
+    def _post(self,data,testParam,prevNode):
         condition = data[self.inputs[1]['paramRef'][0]]
         print(condition)
         next = []
@@ -333,7 +338,7 @@ class IfNode(BaseNode):
         return next
 
 class AddMinusNode(BaseNode):
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         result = 0
         for plus in self.inputs[1]['paramRef']:
             result += data[plus]
@@ -342,7 +347,7 @@ class AddMinusNode(BaseNode):
         data[self.name+'$1'] = result
 
 class MultiDivNode(BaseNode):
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         result = 1
         for mul in self.inputs[1]['paramRef']:
             result *= data[mul]
@@ -351,31 +356,31 @@ class MultiDivNode(BaseNode):
         data[self.name+'$1'] = result
 
 class BiggerNode(BaseNode):
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         data_1 = data[self.inputs[1]['paramRef'][0]]
         data_2 = data[self.inputs[2]['paramRef'][0]]
         data[self.name+'$1'] = data_1 > data_2
 
 class EqualNode(BaseNode):
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         data_1 = data[self.inputs[1]['paramRef'][0]]
         data_2 = data[self.inputs[2]['paramRef'][0]]
         data[self.name+'$1'] = (data_1 == data_2)
 
 class AndNode(BaseNode):
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         condition_1 = data[self.inputs[1]['paramRef'][0]]
         condition_2 = data[self.inputs[2]['paramRef'][0]]
         data[self.name+'$1'] = (condition_1 and condition_2)
 
 class OrNode(BaseNode):
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         condition_1 = data[self.inputs[1]['paramRef'][0]]
         condition_2 = data[self.inputs[2]['paramRef'][0]]
         data[self.name+'$1'] = (condition_1 or condition_2)
 
 class NotNode(BaseNode):
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         print("?")
         inputCondition = data[self.inputs[1]['paramRef'][0]]
         print("?")
@@ -390,11 +395,11 @@ class BarrierNode(BaseNode):
         for prev in self.inputs[0]['paramRef']:
             self.prevNotDone.add(str(prev).partition('$')[0])
 
-    def _post(self,data,prevNode):
+    def _post(self,data,testParam,prevNode):
         if prevNode.name in self.prevNotDone:
             self.prevNotDone.remove(prevNode.name)
         if not self.prevNotDone:
-            return super()._post(data,prevNode)
+            return super()._post(data,testParam,prevNode)
         else:
             return []
 
@@ -405,7 +410,7 @@ class SwitchNode(BaseNode):
             next.append(str(nextNode).partition('$')[0])
         return next
 
-    def _post(self,data,prevNode):
+    def _post(self,data,testParam,prevNode):
         testData = data[self.inputs[1]['paramRef'][0]]
         for i in range(2,len(self.inputs)):
             print('{} {}'.format(2,len(self.inputs)))
@@ -414,15 +419,63 @@ class SwitchNode(BaseNode):
         return self.__genNext(self.outputs[0])
 
 class SerialNode(BaseNode):
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         baudrate = data[self.inputs[1]['paramRef'][0]]
         port = data[self.inputs[2]['paramRef'][0]]
         data[self.name+'$1'] = SerialFile(Tools.createSeralFile(port,baudrate))
 
 class SleepNode(BaseNode):
-    def _run(self,data,prevNode):
+    def _run(self,data,testParam,prevNode):
         sleepTime = data[self.inputs[1]['paramRef'][0]]
         time.sleep(sleepTime/1000)
+
+class ModuleBeginNode(BeginNode):
+    def _run(self,data,testParam,prevNode):
+        # 只需要传递数据
+        for i in range(1,len(self.inputs)):
+            if len(self.inputs[i]['paramRef']) == 0:
+                   continue
+            data[self.name+'$'+str(i)] = data[self.inputs[i]['paramRef'][0]]
+
+# 需要和Barrier一样，等待所有前驱完成
+class ModuleEndNode(BarrierNode):
+    def _post(self,data,testParam,prevNode):
+        ret = BarrierNode._post(self,data,testParam,prevNode)
+        if len(ret) != 0:
+            # 传递数据
+            for i in range(1,len(self.inputs)):
+                data[self.name+'$'+str(i)] = data[self.inputs[i]['paramRef'][0]]
+        return ret
+
+# Module作为一个子图，在这里独立构造内部图，并独立执行
+class CommonModuleNode(BaseNode):
+    def __init__(self, graph_node):
+        super().__init__(graph_node)
+        print(graph_node['internalGraph']['nameNodeMap'])
+        self.internalGraph = TestGraphFactory.buildGraphFromNameNodeMap(graph_node['internalGraph']['nameNodeMap'])
+        # startName beginName需要重新计算
+        for i in self.internalGraph.nodes:
+            if isinstance(i,ModuleBeginNode):
+                self.internalGraph.startName=i.name
+            elif isinstance(i,ModuleEndNode):
+                self.internalGraph.endName=i.name
+    
+    def _run(self, data,testParam, prevNode):
+        super()._run(data,testParam, prevNode)
+        # 传递输入，直接将CommonModuleNode的依赖传递到ModuleBeginNode.outputs位置
+        for inParam in range(1,len(self.inputs)):
+            self.internalGraph.global_data[self.internalGraph.startName+'$'+str(inParam)]=data[self.inputs[inParam]['paramRef'][0]]
+        print(self.internalGraph.global_data)
+        # 执行子图
+        internalResult = self.internalGraph.run(testParam,True)
+        # 合并日志
+        Tools.log(data,internalResult.log,self.name)
+        if internalResult.exitState !=ExitStateEnum.SUCCESS.value:
+            raise TestModuleError("module exit not success")
+        # 传递输出，直接将ModuleEndNode.outputs传递到CommonModuleNode的输出位置
+        for outParm in range(1,len(self.outputs)):
+            data[self.name+'$'+str(outParm)]=self.internalGraph.global_data[self.internalGraph.endName+'$'+str(outParm)]
+            
 
 class NodeFactory:
     nodeLibaries = dict()
@@ -465,12 +518,16 @@ NodeFactory.nodeRegister(VariableNode)
 NodeFactory.nodeRegister(SwitchNode)
 NodeFactory.nodeRegister(SerialNode)
 NodeFactory.nodeRegister(SleepNode)
+NodeFactory.nodeRegister(ModuleBeginNode)
+NodeFactory.nodeRegister(ModuleEndNode)
+NodeFactory.nodeRegister(CommonModuleNode)
 
 class TestParam:
-    def __init__(self,totalTimeout=30000) -> None:
+    def __init__(self,testUUID=None,totalTimeout=30000) -> None:
         self.totalTimeout=totalTimeout
         # 标记测试是否可以继续
         self.toRun=True
+        self.testUUID=testUUID or uuid.uuid4()
 
 class TestGraph:
     def __init__(self,global_data,nodes,startName,endName):
@@ -482,7 +539,7 @@ class TestGraph:
         # 上一个调度执行的节点
         self.lastRunNode = None
     
-    def run(self,testParam:TestParam,testUUID:uuid.UUID):
+    def run(self,testParam:TestParam,inModule=False):
         try:
             # 传递变量区
             # runQueue内容tuple，分别是节点前驱和后继
@@ -494,16 +551,16 @@ class TestGraph:
                 # 整体超时退出
                 if time.time()-a > testParam.totalTimeout:
                     Tools.log(self.global_data,'graph test timeout')
-                    return RunResult(time.time()-a,self.global_data['$$log'],ExitStateEnum.TIMEOUT,testUUID)
+                    return RunResult(time.time()-a,self.global_data['$$log'],ExitStateEnum.TIMEOUT,testParam.testUUID)
                 # 被杀死
                 if testParam.toRun == False:
                     Tools.log(self.global_data,'get killed')
-                    return RunResult(time.time()-a,self.global_data['$$log'],ExitStateEnum.KILLED,testUUID)
+                    return RunResult(time.time()-a,self.global_data['$$log'],ExitStateEnum.KILLED,testParam.testUUID)
                 
                 # 继续执行
                 (prevNode,currentNode) = self.runQueue.get()
                 print('{} running'.format(currentNode.name))
-                nextNodes = currentNode.doRun(self.global_data,prevNode)
+                nextNodes = currentNode.doRun(self.global_data,testParam,prevNode)
                 print('next: {}'.format(nextNodes))
                 for node in nextNodes:
                     self.runQueue.put((currentNode,self.nodes[node]))
@@ -512,27 +569,31 @@ class TestGraph:
             Tools.log(self.global_data,'end running')
             b=time.time()
             Tools.log(self.global_data,'time elapsed :{}'.format(b-a))
-            if not isinstance(self.lastRunNode,EndNode):
+            if inModule == False and not isinstance(self.lastRunNode,EndNode):
                 raise TestRuntimeError(nodeName = self.lastRunNode.name,msg='Test ended at Non-EndNode')
         except TestError as err:
             Tools.log(self.global_data,'{}'.format(err),err.nodeName)
-            return RunResult(time.time()-a,self.global_data['$$log'],ExitStateEnum.TESTERROR,testUUID)
+            return RunResult(time.time()-a,self.global_data['$$log'],ExitStateEnum.TESTERROR,testParam.testUUID)
         except Exception as err:
             Tools.log(self.global_data,'{}'.format(err))
-            return RunResult(time.time()-a,self.global_data['$$log'],ExitStateEnum.EXCEPTION,testUUID)
-        return RunResult(b-a,self.global_data['$$log'],ExitStateEnum.SUCCESS,testUUID)
+            return RunResult(time.time()-a,self.global_data['$$log'],ExitStateEnum.EXCEPTION,testParam.testUUID)
+        return RunResult(b-a,self.global_data['$$log'],ExitStateEnum.SUCCESS,testParam.testUUID)
 
 
 
 class TestGraphFactory:
     @staticmethod
     def buildGraph(jsonData):
-        object = json.loads(jsonData)
+        obj = json.loads(jsonData)
+        return TestGraphFactory.buildGraphFromNameNodeMap(obj['graph']['nameNodeMap'])
+    
+    @staticmethod
+    def buildGraphFromNameNodeMap(nameNodeMap):
         nodes = dict()
         global_data = dict()
         startName=''
         endName=''
-        for jsonNode in object['graph']['nameNodeMap']:
+        for jsonNode in nameNodeMap:
             node = NodeFactory.createNode(graph_node=jsonNode[1])
             nodes[jsonNode[0]]=node
             if isinstance(node,BeginNode):
@@ -544,13 +605,10 @@ class TestGraphFactory:
         return TestGraph(global_data=global_data,nodes=nodes,startName=startName,endName=endName)
 
 class TestPlan:
-    def __init__(self,testGraph:TestGraph,testParam:TestParam=None,planUUID:uuid.UUID=None):
+    def __init__(self,testGraph:TestGraph,testParam:TestParam=None):
         self.graph = testGraph
-        self.planUUID = planUUID
         # 默认测试参数
         self.testParam = testParam or TestParam()
-        # 自动生成UUID
-        self.planUUID = planUUID or uuid.uuid4()
 
 class TestPlanFactory:
     @staticmethod
@@ -568,11 +626,11 @@ class TestExecutor:
     def submitTestTask(testPlan:TestPlan,doneCallBack):
         print("submitTestTask")
         # 保存测试计划
-        TestExecutor.testPlanMap[testPlan.planUUID]=testPlan
+        TestExecutor.testPlanMap[testPlan.testParam.testUUID]=testPlan
         # 保存Future
-        future = TestExecutor.testPool.submit(testPlan.graph.run,testPlan.testParam,testPlan.planUUID)
+        future = TestExecutor.testPool.submit(testPlan.graph.run,testPlan.testParam)
         future.add_done_callback(doneCallBack)
-        TestExecutor.testFutureMap[testPlan.planUUID] = future
+        TestExecutor.testFutureMap[testPlan.testParam.testUUID] = future
 
     @staticmethod
     def killTestTask(testPlanUUID:uuid.UUID):

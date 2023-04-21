@@ -1,8 +1,12 @@
 <script setup lang="ts">
 
-import { onMounted, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { HttpUtil } from '@/Webutils'
 import { ElMessageBox, ElNotification } from 'element-plus';
+import { ElTable } from 'element-plus';
+import { toNestedArr } from 'element-plus/es/components/calendar/src/date-table';
+import * as tn from '@/TestNode'
+import { useGraphNameStore } from '@/stores/counter'
 
 const inputElement = ref();
 
@@ -23,7 +27,7 @@ const showUpload=(event:any)=>{
 }
 
 const sendImportEvent=(event:any)=>{
-  console.log(inputElement.value.files[0]);
+  // console.log(inputElement.value.files[0]);
   const jsonFile = inputElement.value.files[0];
   var reader = new FileReader();
   reader.readAsText(jsonFile);
@@ -44,11 +48,10 @@ const showRunTestGraph = (event:any)=>{
 
 const browseServerVisible = ref(false)
 const saveInfoData = ref()
-const typeFilter = ref(new Set())
-const categoryFilter = ref(new Set())
-const nameFilter = ref(new Set())
+const typeFilter = ref<any[]>([])
+const categoryFilter = ref<any[]>([])
 const browseServerSave = (event:any)=>{
-  console.log(import.meta.env)
+  // console.log(import.meta.env)
   browseServerVisible.value=true;
   HttpUtil.getSave({}
     ,(message:any)=>{
@@ -56,18 +59,24 @@ const browseServerSave = (event:any)=>{
           ElNotification.error({
           title: '注意',
           message: '查询失败'+message.data,
-          showClose: false,
-          duration: 1000
+          showClose: true,
+          duration: 5000
         })
       } else {
         saveInfoData.value = message.data.data;
-        typeFilter.value.clear()
-        categoryFilter.value.clear()
-        nameFilter.value.clear()
+        const typeFilterSet = new Set();
+        const categoryFilterSet = new Set();
         for(let row of message.data.data){
-          typeFilter.value.add({text:row.type,value:row.type})
-          categoryFilter.value.add({text:row.category,value:row.category})
-          nameFilter.value.add({text:row.save_name,value:row.save_name})
+          typeFilterSet.add(row.type)
+          categoryFilterSet.add(row.category)
+        }
+        typeFilter.value.splice(0)
+        for(let item of typeFilterSet){
+          typeFilter.value.push({text:item==0?'模块':'测试图',value:item})
+        }
+        categoryFilter.value.splice(0)
+        for(let item of categoryFilterSet){
+          categoryFilter.value.push({text:item,value:item})
         }
       }
     }
@@ -75,8 +84,8 @@ const browseServerSave = (event:any)=>{
       ElNotification.error({
         title: '注意',
         message: '查询失败'+message,
-        showClose: false,
-        duration: 1000
+        showClose: true,
+        duration: 5000
       })
     });
 }
@@ -91,15 +100,276 @@ const filterHandler = (
 }
 
 const shareSave = ref(false)
+const typeOptions = ref([
+  {
+    label:"模块",
+    value:"0"
+  },
+  {
+    label:"测试图",
+    value:"1"
+  }
+])
+const categoryOptions = ref<any[]>([])
 
+// do not use same name with ref
+const form = reactive({
+  typeValue: '',
+  categoryValue: '',
+  save_name: '',
+  description: '',
+})
 const shareSaveToServer = (event:any)=>{
   shareSave.value=true;
+  HttpUtil.getSaveTypeCategory((message:any)=>{
+    // console.log(message)
+    categoryOptions.value.splice(0);
+    for(let item of message.data.data.categoryName){
+      categoryOptions.value.push({'value':item,'label':item});
+    }
+  }
+  ,(message:any)=>{
+    ElNotification.error({
+      title: '注意',
+      message: '查询失败'+message,
+      showClose: true,
+      duration: 5000
+    })
+  })
+}
+
+const queryCategory = (queryString: string, cb: any) => {
+  const results = queryString
+    ? categoryOptions.value.filter(createFilter(queryString))
+    : categoryOptions.value
+  // call callback function to return suggestions
+  cb(results)
+}
+const createFilter = (queryString: string) => {
+  return (restaurant: any) => {
+    return (
+      restaurant.value.indexOf(queryString.toLowerCase()) === 0
+    )
+  }
 }
 
 const handleImportServerSave = (event:any)=>{
+  if(multipleSelection.value.length==0){
+    ElNotification.warning({
+      title: '注意',
+      message: '请选择要导入的内容',
+      showClose: true,
+      duration: 5000
+    })
+  }
+  // 可以同时导入多个模块，但不能导入多个测试图
+  let moduleCount=0
+  let graphCount=0
+  const saveNames :string[] = [];
+  for(let item of multipleSelection.value){
+    if(item.type==0)
+      moduleCount++;
+    else
+      graphCount++;
+    saveNames.push(item.save_name)
+  }
 
+  const importCallback = ()=>{
+    HttpUtil.getSave(saveNames
+        ,(message:any)=>{
+          if(message.data.code!=0){
+            ElNotification.error({
+              title: '注意',
+              message: '导入失败'+message.data.data,
+              showClose: true,
+              duration: 5000
+            })
+          } else {
+            const e = new CustomEvent('importShareSaves',{detail:message.data.data});
+            dispatchEvent(e);
+
+          }
+        }
+        ,(message:any)=>{
+          ElNotification.error({
+            title: '注意',
+            message: '导入失败'+message.data.data,
+            showClose: true,
+            duration: 5000
+          })
+        });
+  };
+
+  if(graphCount>1){
+    ElNotification.warning({
+      title: '注意',
+      message: '测试图类型最多只能导入一个',
+      showClose: true,
+      duration: 5000
+    })
+    return;
+  }
+  if(graphCount==1){
+    ElMessageBox.confirm(
+    '准备导入外部测试图，将会清空当前测试图，请确认',
+    '请注意',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    .then(() => {
+      importCallback();
+    })
+    .catch(() => {
+      // 取消
+    })
+  } else {
+    importCallback();
+  }
+  
 }
 
+const handleUploadShareSave = (event:any)=>{
+  // 检查表单
+  if(form.save_name.trim().length==0||form.typeValue.trim().length==0||form.categoryValue.trim().length==0){
+    ElNotification.warning({
+      title: '注意',
+      message: '除备注外不可为空',
+      showClose: true,
+      duration: 5000
+    })
+    return;
+  }
+  let graph = '';
+  if(form.typeValue=='0'){
+    try{
+      graph = tn.TestGraphFactory.exportModuleSave(useGraphNameStore().currentGraphName)
+    } catch(error){
+      ElNotification.warning({
+        title: '注意',
+        message: '导出模块失败'+error,
+        showClose: true,
+        duration: 5000
+      })
+      return;
+    }
+  } else {
+    graph = tn.TestGraphFactory.exportGraph(useGraphNameStore().currentGraphName)
+  }
+  // 发送
+  HttpUtil.uploadSave({
+    data: graph,
+    form: form
+  }
+  ,(message:any)=>{
+    // resp
+    if(message.data.code!=0){
+      ElNotification.error({
+        title: '注意',
+        message: '发布失败'+message.data.data,
+        showClose: true,
+        duration: 5000
+      })
+    } else{
+      ElNotification.success({
+        title: '注意',
+        message: '发布成功',
+        showClose: true,
+        duration: 5000
+      })
+      form.categoryValue='';
+      form.description='';
+      form.save_name='';
+      form.typeValue='';
+      shareSave.value=false;
+    }
+  }
+  ,(message:any)=>{
+    // error
+    ElNotification.error({
+      title: '注意',
+      message: '发布失败'+message,
+      showClose: true,
+      duration: 5000
+    })
+  })
+}
+
+const saveInfoRef = ref<InstanceType<typeof ElTable>>()
+const multipleSelection = ref<any[]>([])
+const handleSelectionChange = (val: any[]) => {
+  multipleSelection.value = val
+}
+const handleRowClick = (row:any,column:any,event:any)=>{
+  if(column==null)
+    return;
+  // console.log(column,event.srcElement);
+  if(multipleSelection.value.includes(row)){
+    multipleSelection.value.slice(multipleSelection.value.findIndex((value)=>{return value===row}),1);
+    saveInfoRef.value?.toggleRowSelection(row,false);
+  } else {
+    multipleSelection.value.push(row);
+    saveInfoRef.value?.toggleRowSelection(row,true);
+  }
+}
+
+const typeFormatter = (row: any, column: any) => {
+  return row.type==0?'模块':'测试图'
+}
+
+const handleDeleteServerSavae = (event:any)=>{
+  if(multipleSelection.value.length==0){
+    return;
+  }
+  ElMessageBox.confirm(
+    '删除操作不可逆，确定继续？',
+    '请注意',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  )
+    .then(() => {
+      const deleteNames = []
+      for(let item of multipleSelection.value){
+        deleteNames.push(item.save_name)
+      }
+      HttpUtil.deleteSave(deleteNames
+        ,(message:any)=>{
+          // console.log(message)
+          if(message.data.code!=0){
+            ElNotification.error({
+              title: '注意',
+              message: '删除失败'+message.data.data,
+              showClose: true,
+              duration: 5000
+            })
+          } else {
+            ElNotification.success({
+              title: '注意',
+              message: '删除成功',
+              showClose: true,
+              duration: 5000
+            })
+            // 刷新表格
+            browseServerSave({});
+          }
+        }
+        ,(message:any)=>{
+          ElNotification.error({
+            title: '注意',
+            message: '删除失败'+message.data.data,
+            showClose: true,
+            duration: 5000
+          })
+        })
+    })
+    .catch(() => {
+      // 取消
+    })
+}
 </script>
 
 <template>
@@ -131,13 +401,13 @@ const handleImportServerSave = (event:any)=>{
       width="50%"
       destroy-on-close
     >
-      <el-table :data="saveInfoData" ref="saveInfoRef">
+      <el-table :data="saveInfoData" ref="saveInfoRef" @selection-change="handleSelectionChange" @row-click="handleRowClick">
         <el-table-column type="selection" width="55" />
-        <el-table-column prop="type" label="发布类型" show-overflow-tooltip width="120" sortable :filters="typeFilter" :filter-method="filterHandler">
+        <el-table-column prop="type" label="发布类型" show-overflow-tooltip width="120" sortable :filters="typeFilter" :filter-method="filterHandler" :formatter="typeFormatter">
         </el-table-column>
         <el-table-column prop="category" label="业务分类" show-overflow-tooltip width="140" sortable :filters="categoryFilter" :filter-method="filterHandler">
         </el-table-column>
-        <el-table-column prop="save_name" label="名称" show-overflow-tooltip min-width="140" sortable :filters="nameFilter" :filter-method="filterHandler">
+        <el-table-column prop="save_name" label="名称" show-overflow-tooltip min-width="140" sortable>
         </el-table-column>
         <el-table-column prop="description" label="备注" show-overflow-tooltip min-width="80">
         </el-table-column>
@@ -145,7 +415,8 @@ const handleImportServerSave = (event:any)=>{
         </el-table-column>
       </el-table>
       <template #footer>
-        <el-button @click="handleImportServerSave">导入</el-button>
+        <el-button type="danger" @click="handleDeleteServerSavae">删除</el-button>
+        <el-button type="primary" @click="handleImportServerSave">导入</el-button>
       </template>
     </el-dialog>
 
@@ -154,9 +425,51 @@ const handleImportServerSave = (event:any)=>{
       title="发布共享存档"
       width="30%"
       destroy-on-close
-      center
     >
-      <span>show server saves</span>
+      <el-form :model="form" label-width="120px">
+        <el-form-item label="发布类型">
+          <el-select v-model="form.typeValue" filterable placeholder="选择或输入">
+            <el-option
+              v-for="item in typeOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
+        <!-- <el-form-item label="发布分类">
+          <el-select v-model="form.categoryValue" filterable placeholder="选择或输入">
+            <el-option
+              v-for="item in categoryOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item> -->
+        <el-form-item label="发布分类">
+          <el-autocomplete
+            v-model="form.categoryValue"
+            :fetch-suggestions="queryCategory"
+            clearable
+            style="width:300px;"
+            placeholder="选择或输入"
+          />
+        </el-form-item>
+        <el-form-item label="名称">
+          <el-input
+            v-model="form.save_name"
+          />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input
+            v-model="form.description"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button type="primary" @click="handleUploadShareSave">发布</el-button>
+      </template>
     </el-dialog>
   </el-row>
 </template>
@@ -183,6 +496,9 @@ const handleImportServerSave = (event:any)=>{
   float: right;
   padding-right: 10px;
 }
+.el-icon:hover{
+  color:#79bbff;
+}
 
 .el-button--text {
   margin-right: 15px;
@@ -196,6 +512,5 @@ const handleImportServerSave = (event:any)=>{
 .dialog-footer button:first-child {
   margin-right: 10px;
 }
-
 
 </style>

@@ -66,8 +66,8 @@ function mousedown(event) {
                 </template>
                 <template v-for="item2 in item.children">
                     <el-menu-item :index="item2.index" v-bind:key="item2" v-if="true" @mousedown="mousedown">
-                        <el-icon v-if="item2.index==tn.BeginNode.typeName"><Position  /></el-icon>
-                        <el-icon v-else-if="item2.index==tn.EndNode.typeName"><SwitchButton /></el-icon>
+                        <el-icon v-if="item2.index==tn.BeginNode.typeName||item2.index==tn.ModuleBeginNode.typeName"><Position  /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.EndNode.typeName||item2.index==tn.ModuleEndNode.typeName"><SwitchButton /></el-icon>
                         <el-icon v-else-if="item2.index==tn.LogNode.typeName"><Document /></el-icon>
                         <el-icon v-else-if="item2.index==tn.ExtractNode.typeName"><Scissor /></el-icon>
                         <el-icon v-else-if="item2.index==tn.MergeNode.typeName"><Paperclip /></el-icon>

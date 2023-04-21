@@ -229,7 +229,12 @@ export class TestGraph {
         this.nameNodeMap.set(node.name,node);
     }
 
+    /**
+     * 仅删除节点
+     * @param nodeName 
+     */
     removeNode(nodeName:string){
+        
         this.nameNodeMap.delete(nodeName);
     }
 
@@ -248,6 +253,28 @@ export class TestGraph {
         this.nameNodeMap.get(toNode)!.inputs.params[toParam].paramRef!.splice(toIndex!,1);
     }
 
+    /**
+     * 删除节点，同时删除该节点引申出去的连接
+     * @param nodeName 
+     */
+    removeNodeAndConnection(nodeName:string){
+        for(let fromParam=0;fromParam!=this.nameNodeMap.get(nodeName)?.outputs.params.length;++fromParam){
+            for(let param of this.nameNodeMap.get(nodeName)?.outputs.params[fromParam].paramRef!){
+                const toNode = param.split('$')[0];
+                const toParam = Number(param.split('$')[1]);
+                this.removeConnection(nodeName,fromParam,toNode,toParam);
+            }
+        }
+        for(let toParam=0;toParam!=this.nameNodeMap.get(nodeName)?.inputs.params.length;++toParam){
+            for(let param of this.nameNodeMap.get(nodeName)?.inputs.params[toParam].paramRef!){
+                const fromNode = param.split('$')[0];
+                const fromParam = Number(param.split('$')[1]);
+                this.removeConnection(fromNode,fromParam,nodeName,toParam);
+            }
+        }
+        this.removeNode(nodeName);
+    }
+
     toJSON():object{
         return {
             "graphName":this.graphName,
@@ -261,7 +288,11 @@ export class TestGraph {
         graph.nameCountMap=new Map(jsonObject.nameCountMap);
         const tempNameNodeMap = new Map(jsonObject.nameNodeMap);
         for(let node of tempNameNodeMap.entries()){
-            graph.nameNodeMap.set(node[0] as string,BaseNode.fromJSON(node[1]));
+            if((node[1] as any).internalGraph){
+                graph.nameNodeMap.set(node[0] as string,BaseModule.fromJSON(node[1]));
+            } else {
+                graph.nameNodeMap.set(node[0] as string,BaseNode.fromJSON(node[1]));
+            }
         }
         return graph;
     }
@@ -994,11 +1025,17 @@ export class NodeFactory {
     private constructor(){}
 
     static nodeTypeMap = new Map<string,NodeBuilder>;
+    static moduleTypeMap = new Map<string,ModuleBuilder>
 
     // 加载自定义节点
     static loadNodeLibrary(type: NodeBuilder): boolean{
         this.nodeTypeMap.set(type.typeName,type)
         return true
+    }
+
+    static loadModuleLibrary(type: ModuleBuilder): boolean {
+        this.moduleTypeMap.set(type.typeName,type)
+        return true;
     }
 
     private static buildTestNode(testGraph:TestGraph
@@ -1007,11 +1044,7 @@ export class NodeFactory {
         ,pos_y:number){
         const nodeName = testGraph.newNodeName(nodeType.typeName)
         testGraph.addNode(nodeType.build(nodeName,pos_x,pos_y))
-        const newNodeEvent = new CustomEvent('TGAddNewNode',{'detail': {
-            testGraph:testGraph.graphName,
-            nodeName:nodeName,
-        }});
-        dispatchEvent(newNodeEvent);
+        return nodeName;
     }
 
     static addTestNode(testGraph:TestGraph
@@ -1020,7 +1053,40 @@ export class NodeFactory {
         ,pos_y:number){
         let nodeType = this.nodeTypeMap.get(typeName);
         if(nodeType != undefined){
-            this.buildTestNode(testGraph,nodeType,pos_x,pos_y)
+            const nodeName = this.buildTestNode(testGraph,nodeType,pos_x,pos_y)
+            const newNodeEvent = new CustomEvent('TGAddNewNode',{'detail': {
+                testGraph:testGraph.graphName,
+                nodeName:nodeName,
+            }});
+            dispatchEvent(newNodeEvent);
+        } else {
+            console.log('unknown nodetype: %o',typeName);
+        }
+    }
+
+    private static buildTestModule(testGraph:TestGraph
+        ,nodeType: ModuleBuilder
+        ,pos_x:number
+        ,pos_y:number
+        ,internalGraph:TestGraph){
+        const nodeName = testGraph.newNodeName(nodeType.typeName)
+        testGraph.addNode(nodeType.build(nodeName,pos_x,pos_y,nodeType.typeName,internalGraph))
+        return nodeName;
+    }
+
+    static addTestModule(testGraph:TestGraph
+        ,typeName:string
+        ,pos_x:number
+        ,pos_y:number
+        ,internalGraph:TestGraph) {
+        let nodeType = this.moduleTypeMap.get(typeName);
+        if(nodeType != undefined){
+            const nodeName = this.buildTestModule(testGraph,nodeType,pos_x,pos_y,internalGraph)
+            const newNodeEvent = new CustomEvent('TGAddNewNode',{'detail': {
+                testGraph:testGraph.graphName,
+                nodeName:nodeName,
+            }});
+            dispatchEvent(newNodeEvent);
         } else {
             console.log('unknown nodetype: %o',typeName);
         }
@@ -1051,6 +1117,15 @@ export class TestGraphFactory {
         return ImportExportProtocol.exportGraph(this.testGraphMap.get(graphName)!);
     }
 
+    static exportModuleSave(graphName:string):string{
+        return ImportExportProtocol.exportModuleSave(this.testGraphMap.get(graphName)!); 
+    }
+
+    static exportGraphSave(graphName:string):string{
+        // 导出发布测试图：需要做一些检查工作
+        return "";
+    }
+
     static addTestGraph(graph:TestGraph):boolean{
         if(this.testGraphMap.has(graph.graphName))
             return false;
@@ -1068,17 +1143,23 @@ export class TestGraphFactory {
         }
     }
 
+    static importModuleSave(graph:TestGraph,moduleJson:string){
+        const moduleGraph = ImportExportProtocol.importGraph(moduleJson);
+        NodeFactory.addTestModule(graph,CommonModuleNode.name,100,150,moduleGraph);
+    }
+
     static exportNode(graphName:string,nodeName:string):string{
         return ImportExportProtocol.exportNode(this.testGraphMap.get(graphName)!,nodeName);
     }
 }
 
-export class ImportExportProtocol {
+class ImportExportProtocol {
     /*
         {
             "meta":
             {
-                "version:"0.1"
+                "version:"0.1",
+                "type":"graph|module",
             },
             "graph":
             {
@@ -1096,11 +1177,112 @@ export class ImportExportProtocol {
     }
 
     static exportGraph(graph:TestGraph):string{
-        return JSON.stringify({"meta":{"version":this.version},"graph":graph},null,4);
+        return JSON.stringify({"meta":{"version":this.version,"type":"graph"},"graph":graph},null,4);
     }
 
     static exportNode(graph:TestGraph,nodeName:string):string{
         return JSON.stringify(graph.nameNodeMap.get(nodeName),null,4);
+    }
+
+    static exportModuleSave(graph:TestGraph):string{
+        // 导出发布模块：从当前图中安全地去除ModuleBeginNode的前驱和ModuleEndNode的后继
+        // 需要做一些基础检查工作，保证模块能作为整体执行，但执行情况无法保证（停机问题？）
+        //          1.有且仅有一对儿ModuleBegin/EndNode（保证一个进入点和一个推出点）
+        //          2.ModuleBeginNode的递归前驱集合A，后继只能在A中或是ModuleBeginNode（保证模块内部数据仅依赖ModuleBeginNode）
+        //          3.和2相反同理，ModuleEndNod递归后继集合B，其前驱只能在B中或者是ModuleEndNode（保证模块结果都输出到ModuleEndNode）
+        if(graph==undefined){
+            throw Error('graph not exist');
+        }
+        let beginCount=0,endCount=0;
+        let beginName:string,endName:string;
+        for(let node of graph!.nameNodeMap.values()!){
+            if(node.typeName==ModuleBeginNode.name){
+                beginCount++;
+                beginName=node.name;
+            } else if(node.typeName==ModuleEndNode.name){
+                endCount++;
+                endName=node.name;
+            }
+        }
+        if(beginCount!=1||endCount!=1){
+            throw Error('must have one and only one ModuleBeginNode and ModuleEndNode');
+        }
+        // 检查ModuleBegin前驱Map
+        const predecessorMap = new Set<string>();
+        const queue:string[] = [];
+        queue.push(beginName!);
+        predecessorMap.add(beginName!);
+        while(queue.length!=0){
+            const nodeName=queue[0];
+            queue.splice(0,1);
+            // 所有inputParam的所有paramRef
+            for(let param of graph!.nameNodeMap.get(nodeName)!.inputs.params){
+                for(let paramRef of param.paramRef){
+                    const preName = paramRef.split('$')[0];
+                    if(!predecessorMap.has(preName)){
+                        queue.push(preName);
+                        predecessorMap.add(preName);
+                    }
+                }
+            }
+        }
+        for(let nodeName of predecessorMap){
+            // 所有outputParam的所有paramRef
+            if(nodeName===beginName!)
+                continue;
+            for(let param of graph!.nameNodeMap.get(nodeName)!.outputs.params){
+                for(let paramRef of param.paramRef){
+                    const sucName = paramRef.split('$')[0];
+                    if(!predecessorMap.has(sucName)){
+                        console.log(sucName);
+                        throw Error("predesessor invalid");
+                    }
+                }
+            }
+        }
+        // 后继Map
+        const successorMap = new Set<string>();
+        queue.push(endName!);
+        successorMap.add(endName!);
+        while(queue.length!=0){
+            const nodeName=queue[0];
+            queue.splice(0,1);
+            // 所有outputParam的所有paramRef
+            for(let param of graph!.nameNodeMap.get(nodeName)!.outputs.params){
+                for(let paramRef of param.paramRef){
+                    const preName = paramRef.split('$')[0];
+                    if(!successorMap.has(preName)){
+                        queue.push(preName);
+                        successorMap.add(preName);
+                    }
+                }
+            }
+        }
+        for(let nodeName of successorMap){
+            if(nodeName===endName!)
+                continue;
+            // 所有inputParam的所有paramRef
+            for(let param of graph!.nameNodeMap.get(nodeName)!.inputs.params){
+                for(let paramRef of param.paramRef){
+                    const preName = paramRef.split('$')[0];
+                    if(!successorMap.has(preName)){
+                        throw Error("successor invalid");
+                    }
+                }
+            }
+        }
+        // TODO：更好的深拷贝方案
+        const copyGraph = this.importGraph(this.exportGraph(graph));
+        // 删除predecessor、successor
+        predecessorMap.delete(beginName!);
+        successorMap.delete(endName!);
+        for(let item of predecessorMap){
+            copyGraph.removeNodeAndConnection(item);
+        }
+        for(let item of successorMap){
+            copyGraph.removeNodeAndConnection(item);
+        }
+        return JSON.stringify({"meta":{"version":this.version,"type":"module"},"graph":copyGraph},null,4);
     }
 }
 
@@ -1173,3 +1355,141 @@ NodeFactory.loadNodeLibrary(NotNode);
 NodeFactory.loadNodeLibrary(BarrierNode);
 NodeFactory.loadNodeLibrary(VariableNode);
 NodeFactory.loadNodeLibrary(SleepNode);
+
+// 模块实现
+
+
+export class ModuleFlowParam {
+    static readonly typeName: string = ModuleFlowParam.name
+    static readonly categoryNames: Array<ParamCategoryEnums>=[ParamCategoryEnums.Flow];
+    static build(paramName:string
+        ,paramType:ParamRuntimeTypeEnums
+        ,paramRef:Array<string>
+        ,paramValue:string):BaseParam {
+        return new BaseParam(ModuleFlowParam.typeName
+            ,ModuleFlowParam.categoryNames
+            ,paramName
+            ,paramType
+            ,paramRef
+            ,paramValue);
+    }
+}
+
+export class ModuleDataParam {
+    static readonly typeName: string = ModuleDataParam.name;
+    static readonly categoryNames: Array<ParamCategoryEnums>=[ParamCategoryEnums.Data];
+    static build(paramName:string
+        ,paramType:ParamRuntimeTypeEnums
+        ,paramRef:Array<string>
+        ,paramValue:string):BaseParam {
+        return new BaseParam(ModuleDataParam.typeName
+            ,ModuleDataParam.categoryNames
+            ,paramName
+            ,paramType
+            ,paramRef
+            ,paramValue);
+    }
+}
+
+ParamLibrary.addParamBuilder(ModuleFlowParam)
+ParamLibrary.addParamBuilder(ModuleDataParam)
+
+export class ModuleBeginNode extends BeginNode {
+    static categoryName = CategoryEnums.FlowType;
+    static typeName = ModuleBeginNode.name;
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const temp = BeginNode.build(nodeName,pos_x,pos_y);
+        temp.inputs.addParam(FlowParam,'prev');
+        temp.typeName = this.typeName;
+        return temp;
+    }
+}
+
+export class ModuleEndNode extends EndNode {
+    static categoryName = CategoryEnums.FlowType;
+    static typeName = ModuleEndNode.name;
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const temp = EndNode.build(nodeName,pos_x,pos_y);
+        temp.outputs.addParam(FlowParam,'next');
+        temp.typeName = this.typeName;
+        return temp;
+    }
+}
+NodeFactory.loadNodeLibrary(ModuleBeginNode);
+NodeFactory.loadNodeLibrary(ModuleEndNode);
+
+basicNodeTranslate.set('ModuleBeginNode','模块起始节点')
+basicNodeTranslate.set('ModuleEndNode','模块终止节点')
+
+// Module只有表示，不能直接从左侧拖拽新增，需要先创建，再导入
+// 是一种以Node绘制的特殊的测试图
+// 运行时会单独执行其内部的测试图（递归），全部执行后，恢复到当前测试图
+export class BaseModule extends BaseNode {
+    // 模块内部相当于有一个图
+    public internalGraph;
+    constructor(name:string,pos_x:number,pos_y:number,typeName:string,data:object,html:string,internalGraph:TestGraph){
+        // 模块的输入输出节点，由其内部节点中的起始节点，终止节点决定
+        // 起始节点决定输入
+        // 终止节点决定输出
+        const input = new InOutParams();
+        let startName:string=''
+        let endName:string='';
+        for(let item of internalGraph.nameNodeMap.values()){
+            if(item.typeName==ModuleBeginNode.name){
+                startName=item.name;
+            } else if(item.typeName==ModuleEndNode.name){
+                endName=item.name;
+            }
+        }
+        for(let i=0;i!=internalGraph.nameNodeMap.get(startName)?.outputs.params!.length;++i){
+            let param = internalGraph.nameNodeMap.get(startName)?.outputs.params[i];
+            if(i==0){
+                // flow param
+                input.addParam(ModuleFlowParam,'prev');
+            } else {
+                // data param
+                input.addParam(ModuleDataParam,param?.paramName!);
+            }
+        }
+        const output = new InOutParams();
+        for(let i=0;i!=internalGraph.nameNodeMap.get(endName)?.inputs.params!.length;++i){
+            let param = internalGraph.nameNodeMap.get(endName)?.inputs.params[i];
+            if(i==0){
+                // flow param
+                output.addParam(ModuleFlowParam,'prev');
+            } else {
+                // data param
+                output.addParam(ModuleDataParam,param?.paramName!);
+            }
+        }
+        super(name,input,output,pos_x,pos_y,typeName,data,html);
+        this.internalGraph=internalGraph;
+    }
+
+    static fromJSON(jsonObject:any):BaseModule{
+        const temp =  new BaseModule(jsonObject.name
+            ,jsonObject.pos_x
+            ,jsonObject.pos_y
+            ,jsonObject.typeName
+            ,jsonObject.data
+            ,jsonObject.html
+            ,TestGraph.fromJSON(jsonObject.internalGraph));
+        temp.inputs = InOutParams.fromJSON(jsonObject.inputs);
+        temp.outputs = InOutParams.fromJSON(jsonObject.outputs);
+        return temp;
+    }
+}
+
+export interface ModuleBuilder {
+    readonly typeName: string;
+    build(nodeName:string, pos_x:number, pos_y:number, typeName:string, internalGraph:TestGraph): BaseModule;
+}
+
+export class CommonModuleNode {
+    static readonly typeName: string = CommonModuleNode.name;
+    static build(nodeName:string, pos_x:number, pos_y:number, typeName:string, internalGraph:TestGraph): BaseModule {
+        return new BaseModule(nodeName,pos_x,pos_y,typeName,{},nodeName,internalGraph);
+    }
+}
+
+NodeFactory.loadModuleLibrary(CommonModuleNode);

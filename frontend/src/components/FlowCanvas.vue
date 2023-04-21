@@ -9,7 +9,7 @@ import Drawflow from '@/../Drawflow/src/drawflow.js'
 import '@/assets/custom-drawflow.css'
 import NodeDetail from './NodeDetail.vue'
 import GraphRunDetail from './GraphRunDetail.vue'
-
+import {useGraphNameStore,useFlowModeStore} from '@/stores/counter'
 import * as tn from  '@/TestNode'
 import { ref } from 'vue'
 
@@ -25,6 +25,10 @@ const dialogVisible = ref(false);
 const detailGraphName = ref("");
 const detailNodeName = ref("");
 const graphRunDrawler = ref(false);
+
+// 存储当前处理的模块
+const currentGraphName = useGraphNameStore()
+const currentFlowMode = useFlowModeStore()
 
 // 绘制节点id和数据节点id映射(双向)
 const drawDataIdMap = new Map<string,string>();
@@ -181,6 +185,7 @@ onMounted(()=>{
   addEventListener('exportTestGraph',exportGraph);
   addEventListener('dataNodeChanged',dataNodeChanged);
   addEventListener('runTestGraph',runTestGraph);
+  addEventListener('importShareSaves',importShareSaves);
 
   editor.on('keydown',(event:any)=>{
     if(event.key=='*'){
@@ -197,6 +202,7 @@ const runTestGraph = (event:any) => {
 const dataNodeChanged = (event:any)=>{
   const graphName = event.detail.graphName;
   const nodeName = event.detail.nodeName;
+  currentGraphName.setCurrent(graphName)
   // 只是值修改
   const node = tn.TestGraphFactory.getTestGraph(graphName).nameNodeMap.get(nodeName)!;
   editor.updateNode(dataDrawIdMap.get(nodeName)
@@ -214,7 +220,9 @@ const clearAll=()=>{
 }
 
 const initTestGraph = ()=>{
-  graph = tn.TestGraphFactory.buildTestGraph("test")
+  currentFlowMode.setCurrent('graph');
+  graph = tn.TestGraphFactory.buildTestGraph("default")
+  currentGraphName.setCurrent(graph.graphName)
   tn.NodeFactory.addTestNode(graph,tn.BeginNode.typeName,100,100);
   tn.NodeFactory.addTestNode(graph,tn.EndNode.typeName,500,100);
 }
@@ -252,7 +260,7 @@ const initConnections = ()=>{
   }
 }
 
-//TODO: 导出测试图
+// 导出测试图
 const exportGraph = ()=>{
   var exportJson = tn.TestGraphFactory.exportGraph(graph.graphName);
   outputData.value=exportJson;
@@ -261,12 +269,28 @@ const exportGraph = ()=>{
 }
 
 
-//TODO: 导入测试图
+// 导入测试图
 const importGraph = (event:any)=>{
   // 重建测试图
   waitGraph.value = tn.TestGraphFactory.importGraph(event.detail);
   if(waitGraph.value != null){
     dialogVisible.value=true;
+  }
+}
+
+// TODO: 导入分享内容
+// data {'graph':jsonGraph,'modules':[jsonModule,jsonModule...]}
+const importShareSaves = (event:any) => {
+  // TODO: 分享内容节点名称可能冲突，需要额外处理
+  // 先导入测试图（如果有的话）
+  console.log(event.detail)
+  if(event.detail.graph){
+    waitGraph.value = tn.TestGraphFactory.importGraph(event.detail.graph);
+    cleanAndDraw(null);
+  }
+  // TODO: 再导入模块
+  for(let mod of event.detail.modules){
+    tn.TestGraphFactory.importModuleSave(graph,mod);
   }
 }
 
