@@ -18,7 +18,8 @@ enum GraphRunStateEnum {
   INCOMPATIBLE  = '不兼容',
   KILLED        = '强制结束',
   TIMEOUT       = '超时',
-  INVALID       = '无效'
+  INVALID       = '无效',
+  ASSERTERROR   = '断言未通过',
 }
 
 enum ServerLinkStateEnum {
@@ -152,6 +153,14 @@ class ServerInfo{
             }
             case ExitStateEnum.TESTERROR:{
               this.runState = GraphRunStateEnum.FAILED;
+              break;
+            }
+            case ExitStateEnum.ASSERTERROR:{
+              this.runState = GraphRunStateEnum.ASSERTERROR;
+              break;
+            }
+            default:{
+              this.runState = GraphRunStateEnum.INVALID;
               break;
             }
           }
@@ -430,6 +439,7 @@ const logDownload=(row:any)=>{
               <el-tag v-else-if="scope.row.runState==GraphRunStateEnum.SUCCESS" effect="dark" size="large" type="success">{{ scope.row.runState }}</el-tag>
               <el-tag v-else-if="scope.row.runState==GraphRunStateEnum.UNKNOWN" effect="dark" size="large" type="info">{{ scope.row.runState }}</el-tag>
               <el-tag v-else-if="scope.row.runState==GraphRunStateEnum.FAILED
+                              ||scope.row.runState==GraphRunStateEnum.ASSERTERROR
                               ||scope.row.runState==GraphRunStateEnum.INCOMPATIBLE
                               ||scope.row.runState==GraphRunStateEnum.TIMEOUT
                               ||scope.row.runState==GraphRunStateEnum.INVALID

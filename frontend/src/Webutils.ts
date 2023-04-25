@@ -99,6 +99,8 @@ export enum ExitStateEnum {
     EXCEPTION   = 3,
     // # 被杀死
     KILLED      = 4,
+    // # 断言未通过
+    ASSERTERROR = 5,
     // # 无效
     INVALID     = 6,
 }

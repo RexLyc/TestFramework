@@ -26,6 +26,8 @@ class ExitStateEnum(Enum):
     EXCEPTION   = 3
     # 被杀死
     KILLED      = 4
+    # 断言未通过
+    ASSERTERROR = 5
     # 无效
     INVALID     = 6
 
@@ -56,8 +58,27 @@ class TestIncompatibleError(TestError):
 class TestModuleError(TestRuntimeError):
     pass
 
+class TestAssertError(TestRuntimeError):
+    pass
+
+class TestFlowAssertError(TestAssertError):
+    pass
+
+class TestStructureAssertError(TestAssertError):
+    pass
+
+class TestDataAssertError(TestAssertError):
+    pass
+
 
 # ================= 工具 =================
+class PythonValue:
+    def __init__(self,script) -> None:
+        self.script = script
+    
+    def __call__(self, *args, **kwds):
+        return compile(self.script,'','exec')
+
 class Tools:
     @staticmethod
     def getParamType(typeName):
@@ -69,6 +90,8 @@ class Tools:
             return float
         elif typeName == 'BoolValue':
             return bool
+        elif typeName == PythonValue.__name__:
+            return PythonValue
         else:
             return None
     
@@ -117,11 +140,96 @@ class Tools:
     def strTobytes(string):
         # 将十六进制字符串转为bytes
         return bytes.fromhex(string)
+    
+    @staticmethod
+    def jsonStructureCompare(src_data,dst_data):
+        '''
+        json结构递归对比\n
+            1. 每一层类型需要相同：dict、list、其他\n
+            2. 为dict时，要求key集合等价，对value递归\n
+            3. 为list时\n
+                1. 如果所有src_data类型相同，且所有dst_data类型相同，允许二者长度不匹配，取公共长度部分进行递归\n
+                2. 否则长度必须匹配，进行递归\n
+            4. 其他，恒为True\n
+        '''
+        if type(src_data) != type(dst_data):
+            return False
+        if isinstance(src_data, dict):
+            # """若为dict格式"""
+            for key in dst_data:
+                if key not in src_data:
+                    return False
+            for key in src_data:
+                if key not in dst_data:
+                    return False
+            # 对所有value递归
+            for key in src_data:
+                if Tools.jsonStructureCompare(src_data[key],dst_data[key]) == False:
+                    return False
+        elif isinstance(src_data, list):
+            # """若为list格式"""
+            # 当且仅当所有value同一类型，才允许有数量差异
+            sameType = True
+            for i in range(0,len(src_data)):
+                if type(src_data[i]) != type(src_data[0]):
+                    sameType = False
+                    break
+            if sameType == True:
+                for i in range(0,len(dst_data)):
+                    if type(dst_data[i]) != type(dst_data[0]):
+                        sameType = False
+                        break
+            if sameType == False and len(src_data) != len(dst_data):
+                return False
+            # 同一类型，或者不同类型但是长度相等，继续递归判断
+            for i in range(0,min(len(src_data),len(dst_data))):
+                if Tools.jsonStructureCompare(src_data[i],dst_data[i]) == False:
+                    return False
+        else:
+            # 其他情况不需要递归，直接判相同
+            return True
+    
+    @staticmethod
+    def jsonDataCompare(src_data,dst_data):
+        '''
+        json类型数据对比，每一层长度、类型都必须完全相同
+        '''
+        # 类型或长度任何一个不等都判负
+        if type(src_data) != type(dst_data):
+            return False
+        if isinstance(src_data, dict):
+            # """若为dict格式"""
+            if len(src_data) != len(dst_data):
+                return False
+            for key in dst_data:
+                if key not in src_data:
+                    return False
+            for key in src_data:
+                if key not in dst_data:
+                    return False
+            # 对所有value递归
+            for key in src_data:
+                if Tools.jsonDataCompare(src_data[key],dst_data[key]) == False:
+                    return False
+        elif isinstance(src_data, list):
+            # """若为list格式"""
+            # 继续递归判断
+            if len(src_data) != len(dst_data):
+                return False
+            for i in range(0,len(src_data)):
+                if Tools.jsonDataCompare(src_data[i],dst_data[i]) == False:
+                    return False
+        else:
+            # 其他情况不需要递归，直接判断
+            return src_data == dst_data
 
 # ================= IO参数 抽象 ================= 
 class File:
     def __init__(self,file):
         self.file=file
+    
+    def close(self):
+        self.file.close()
 
 class HttpFile(File):
     def __init__(self,url,method):
@@ -158,7 +266,7 @@ class BaseNode:
     def __str__(self):
         return 'Type: {}, Id: {}'.format(self.__class__, self.name)
 
-    def _run(self,data,testParam,prevNode):
+    def _run(self,data,testParam,prevNode)->list:
         pass
     
     def _writeBack(self,data):
@@ -169,12 +277,23 @@ class BaseNode:
         next = []
         for nextNode in self.outputs[0]['paramRef']:
             next.append(str(nextNode).partition('$')[0])
-        return next
+        return next, True
 
     # 执行运算，并返回下一个运行的节点
     def doRun(self,data,testParam=None,prevNode=None):
         try:
             self._run(data,testParam,prevNode)
+            self._writeBack(data)
+            return self._post(data,testParam,prevNode)
+        except TestError as err:
+            raise err
+        except Exception as err:
+            raise TestRuntimeError(self.name,'{}'.format(err))
+
+class FileNode(BaseNode):
+    def doRun(self, data, testParam=None, prevNode=None):
+        try:
+            data['$$file'] += self._run(data,testParam,prevNode)
             self._writeBack(data)
             return self._post(data,testParam,prevNode)
         except TestError as err:
@@ -203,13 +322,14 @@ class VariableNode(ConstantNode):
 
 class EndNode(BaseNode):
     def _post(self,data,testParam,prevNode):
-        return []
+        return [], True
 
-class HttpNode(BaseNode):
+class HttpNode(FileNode):
     def _run(self,data,testParam,prevNode):
         url = data[self.inputs[1]['paramRef'][0]]
         method = data[self.inputs[2]['paramRef'][0]]
         data[self.name+'$1']=HttpFile(url,method)
+        return [data[self.name+'$1']]
 
 class SendNode(BaseNode):
     def _run(self,data,testParam,prevNode):
@@ -249,7 +369,10 @@ class LogNode(BaseNode):
     def _run(self,data,testParam,prevNode):
         logData = ''
         for i in self.inputs[1]['paramRef']:
-            logData += data[i] +' '
+            if isinstance(data[i],bytes):
+                logData += str(data[i].hex()) +' '
+            else:
+                logData += str(data[i]) +' '
         Tools.log(data,logData,self.name)
 
 class ExtractNode(BaseNode):
@@ -265,12 +388,13 @@ class MergeNode(BaseNode):
         outputData = data_1 + data_2
         data[self.name+'$1']=outputData
 
-class TCPNode(BaseNode):
+class TCPNode(FileNode):
     def _run(self,data,testParam,prevNode):
         addr = data[self.inputs[1]['paramRef'][0]]
         port = data[self.inputs[2]['paramRef'][0]]
         tcpFile = TcpFile(Tools.createTcpFile(addr,port))
         data[self.name+'$1'] = tcpFile
+        return [data[self.name+'$1']]
 
 class RecvNode(BaseNode):
     def _run(self,data,testParam,prevNode):
@@ -314,13 +438,14 @@ class RecvNode(BaseNode):
             raise TestRuntimeError(self.name,'unsupport RecvNode file: {}'.format(file))
         data[self.name+'$1'] = outputData
 
-class WebSocketNode(BaseNode):
+class WebSocketNode(FileNode):
     def _run(self,data,testParam,prevNode):
         url = data[self.inputs[1]['paramRef'][0]]
         new_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(new_loop)
         outputData = WebsocketFile(asyncio.get_event_loop().run_until_complete(Tools.createWebsocketFile(url)))
         data[self.name+'$1'] = outputData
+        return [data[self.name+'$1']]
 
 class IfNode(BaseNode):
     def _post(self,data,testParam,prevNode):
@@ -335,7 +460,7 @@ class IfNode(BaseNode):
                 next.append(str(nextNode).partition('$')[0])
         else:
             raise TestRuntimeError(self.name,'invalid condition: {}'.format(condition))
-        return next
+        return next, True
 
 class AddMinusNode(BaseNode):
     def _run(self,data,testParam,prevNode):
@@ -401,28 +526,34 @@ class BarrierNode(BaseNode):
         if not self.prevNotDone:
             return super()._post(data,testParam,prevNode)
         else:
-            return []
+            return [], False
 
 class SwitchNode(BaseNode):
     def __genNext(self,output):
         next = []
         for nextNode in output['paramRef']:
             next.append(str(nextNode).partition('$')[0])
-        return next
+        return next, True
 
     def _post(self,data,testParam,prevNode):
         testData = data[self.inputs[1]['paramRef'][0]]
         for i in range(2,len(self.inputs)):
             print('{} {}'.format(2,len(self.inputs)))
-            if testData == data[self.inputs[i]['paramRef'][0]]:
+            tempTestData = testData
+            if type(tempTestData) != type(data[self.inputs[i]['paramRef'][0]]):
+                # 类型不相等，需要进行处理
+                if isinstance(tempTestData,bytes) and isinstance(data[self.inputs[i]['paramRef'][0]],str):
+                    tempTestData = tempTestData.hex()
+            if tempTestData == data[self.inputs[i]['paramRef'][0]]:
                 return self.__genNext(self.outputs[i-1])
         return self.__genNext(self.outputs[0])
 
-class SerialNode(BaseNode):
+class SerialNode(FileNode):
     def _run(self,data,testParam,prevNode):
         baudrate = data[self.inputs[1]['paramRef'][0]]
         port = data[self.inputs[2]['paramRef'][0]]
         data[self.name+'$1'] = SerialFile(Tools.createSeralFile(port,baudrate))
+        return [data[self.name+'$1']]
 
 class SleepNode(BaseNode):
     def _run(self,data,testParam,prevNode):
@@ -454,7 +585,8 @@ class CommonModuleNode(BaseNode):
         print(graph_node['internalGraph']['nameNodeMap'])
         self.internalGraph = TestGraphFactory.buildGraphFromNameNodeMap(graph_node['internalGraph']['nameNodeMap'])
         # startName beginName需要重新计算
-        for i in self.internalGraph.nodes:
+        for nodeName in self.internalGraph.nodes:
+            i = self.internalGraph.nodes[nodeName]
             if isinstance(i,ModuleBeginNode):
                 self.internalGraph.startName=i.name
             elif isinstance(i,ModuleEndNode):
@@ -475,7 +607,67 @@ class CommonModuleNode(BaseNode):
         # 传递输出，直接将ModuleEndNode.outputs传递到CommonModuleNode的输出位置
         for outParm in range(1,len(self.outputs)):
             data[self.name+'$'+str(outParm)]=self.internalGraph.global_data[self.internalGraph.endName+'$'+str(outParm)]
-            
+
+class FlowAssertNode(BaseNode):
+    def _run(self, data, testParam, prevNode):
+        raise TestFlowAssertError(self.name,'Bad Flow Position')
+
+class StructureAssertNode(BaseNode):
+    def _run(self, data, testParam, prevNode):
+        # 对输入数据进行JSON反序列化并递归判断
+        dataObject = json.loads(data[self.inputs[1]['paramRef'][0]])
+        exampleObject = json.loads(data[self.inputs[2]['paramRef'][0]])
+        if Tools.jsonStructureCompare(dataObject,exampleObject) == False:
+            raise TestStructureAssertError(self.name,'json structure not match')
+
+class DataAssertNode(BaseNode):
+    def _run(self, data, testParam, prevNode):
+        # 对输入数据进行JSON反序列化并递归判断
+        dataObject = json.loads(data[self.inputs[1]['paramRef'][0]])
+        exampleObject = json.loads(data[self.inputs[2]['paramRef'][0]])
+        print('data obj {}'.format(dataObject))
+        print('example obj {}'.format(exampleObject))
+        if Tools.jsonDataCompare(dataObject,exampleObject) == False:
+            raise TestStructureAssertError(self.name,'json data not match')
+
+class PythonNode(BaseNode):
+    def _run(self, data, testParam, prevNode):
+        # 将输入数据作为python脚本，在新进程中启动
+        script = data[self.inputs[1]['paramRef'][0]]
+        args = data[self.inputs[2]['paramRef'][0]]
+        execArgs = {'__builtins__':{'print':print
+                                    ,'list':list
+                                    ,'set':set
+                                    ,'dict':dict
+                                    ,'min':min
+                                    ,'max':max
+                                    ,'locals':locals
+                                    ,'False':False
+                                    ,'True':True
+                                    ,'abs':abs
+                                    ,'bool':bool
+                                    ,'bytearray':bytearray
+                                    ,'bytes':bytes
+                                    ,'float':float
+                                    ,'format':format
+                                    ,'hash':hash
+                                    ,'hex':hex
+                                    ,'bin':bin
+                                    ,'int':int
+                                    ,'isinstance':isinstance
+                                    ,'iter':iter
+                                    ,'len':len
+                                    ,'object':object
+                                    ,'pow':pow
+                                    ,'range':range
+                                    ,'round':round
+                                    ,'slice':slice
+                                    ,'str':str
+                                    ,'sum':sum
+                                    ,'tuple':tuple
+                                    ,'type':type}}
+        exec(script.script, execArgs)
+        data[self.name+'$1'] = execArgs['func'](args)
 
 class NodeFactory:
     nodeLibaries = dict()
@@ -521,6 +713,10 @@ NodeFactory.nodeRegister(SleepNode)
 NodeFactory.nodeRegister(ModuleBeginNode)
 NodeFactory.nodeRegister(ModuleEndNode)
 NodeFactory.nodeRegister(CommonModuleNode)
+NodeFactory.nodeRegister(FlowAssertNode)
+NodeFactory.nodeRegister(StructureAssertNode)
+NodeFactory.nodeRegister(DataAssertNode)
+NodeFactory.nodeRegister(PythonNode)
 
 class TestParam:
     def __init__(self,testUUID=None,totalTimeout=30000) -> None:
@@ -546,6 +742,7 @@ class TestGraph:
             self.runQueue.put((None,self.nodes[self.startName]))
             a=time.time()
             Tools.log(self.global_data,'begin running')
+            self.global_data['$$file'] = []
             while not self.runQueue.empty():
                 # TODO：更好的超时检查方案
                 # 整体超时退出
@@ -560,10 +757,11 @@ class TestGraph:
                 # 继续执行
                 (prevNode,currentNode) = self.runQueue.get()
                 print('{} running'.format(currentNode.name))
-                nextNodes = currentNode.doRun(self.global_data,testParam,prevNode)
-                print('next: {}'.format(nextNodes))
-                for node in nextNodes:
-                    self.runQueue.put((currentNode,self.nodes[node]))
+                nextNodes, isValid = currentNode.doRun(self.global_data,testParam,prevNode)
+                print('next: {}, isValid: {}'.format(nextNodes,isValid))
+                if isValid:
+                    for node in nextNodes:
+                        self.runQueue.put((currentNode,self.nodes[node]))
                 self.lastRunNode = currentNode
             
             Tools.log(self.global_data,'end running')
@@ -571,12 +769,19 @@ class TestGraph:
             Tools.log(self.global_data,'time elapsed :{}'.format(b-a))
             if inModule == False and not isinstance(self.lastRunNode,EndNode):
                 raise TestRuntimeError(nodeName = self.lastRunNode.name,msg='Test ended at Non-EndNode')
+        except TestAssertError as err:
+            Tools.log(self.global_data,'{}'.format(err),err.nodeName)
+            return RunResult(time.time()-a,self.global_data['$$log'],ExitStateEnum.ASSERTERROR,testParam.testUUID)
         except TestError as err:
             Tools.log(self.global_data,'{}'.format(err),err.nodeName)
             return RunResult(time.time()-a,self.global_data['$$log'],ExitStateEnum.TESTERROR,testParam.testUUID)
         except Exception as err:
             Tools.log(self.global_data,'{}'.format(err))
             return RunResult(time.time()-a,self.global_data['$$log'],ExitStateEnum.EXCEPTION,testParam.testUUID)
+        finally:
+            # 关闭所有file
+            for file in self.global_data['$$file']:
+                file.close()
         return RunResult(b-a,self.global_data['$$log'],ExitStateEnum.SUCCESS,testParam.testUUID)
 
 

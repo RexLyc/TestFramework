@@ -160,6 +160,7 @@ onMounted(()=>{
   })
 
   editor.on('connectionRemoved',(detail:any)=>{
+    console.log(detail)
     graph.removeConnection(drawDataIdMap.get(detail.output_id)!
       ,detail.output_class.slice(7)-1
       ,drawDataIdMap.get(detail.input_id)!
@@ -184,6 +185,7 @@ onMounted(()=>{
   addEventListener('importTestGraph',importGraph);
   addEventListener('exportTestGraph',exportGraph);
   addEventListener('dataNodeChanged',dataNodeChanged);
+  addEventListener('nodeParamCountChanged',onNodeParamCountChanged);
   addEventListener('runTestGraph',runTestGraph);
   addEventListener('importShareSaves',importShareSaves);
 
@@ -203,13 +205,21 @@ const dataNodeChanged = (event:any)=>{
   const graphName = event.detail.graphName;
   const nodeName = event.detail.nodeName;
   currentGraphName.setCurrent(graphName)
-  // 只是值修改
   const node = tn.TestGraphFactory.getTestGraph(graphName).nameNodeMap.get(nodeName)!;
+  // 更新节点名称，输入输出数量
   editor.updateNode(dataDrawIdMap.get(nodeName)
     ,node.html
     ,node.inputs
     ,node.outputs);
   outputData.value = tn.TestGraphFactory.exportNode(graph.graphName,nodeName);
+}
+
+const onNodeParamCountChanged = (event:any) => {
+  // TODO: 处理连接
+  const graphName = event.detail.graphName;
+  const nodeName = event.detail.nodeName;
+  // 转发给数据修改
+  dataNodeChanged(event);
 }
 
 const clearAll=()=>{
@@ -350,7 +360,7 @@ function download(filename:string, content:string) {
   <div id="container">
     <div id="drawflow"></div>
   
-      <el-drawer v-model="detailDrawler" title="细节" margin="0" padding="0">
+      <el-drawer v-model="detailDrawler" title="细节" margin="0" padding="0" size="50%">
         <el-scrollbar>
           <div id="drawDiv">
             <NodeDetail :graph-name="detailGraphName" :node-name="detailNodeName"/>

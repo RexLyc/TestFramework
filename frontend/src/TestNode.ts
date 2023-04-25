@@ -149,10 +149,11 @@ ParamLibrary.addParamBuilder(ConstantParam);
 // 必须满足的InOut参数要求
 export class InOutParams {
     params: Array<BaseParam>;
-    paramNameIndexMap: Map<String,number>;
+    // 不再要求参数名唯一性
+    // paramNameIndexMap: Map<String,number>;
     constructor(){
         this.params=new Array();
-        this.paramNameIndexMap=new Map();
+        // this.paramNameIndexMap=new Map();
     }
 
     addParam(paramBuilder:ParamBuilder | string
@@ -160,9 +161,9 @@ export class InOutParams {
             ,paramType:ParamRuntimeTypeEnums=ParamRuntimeTypeEnums.VarNameValue
             ,paramRef:Array<string>=[]
             ,paramValue:string=''): InOutParams {
-        if(this.paramNameIndexMap.has(paramName))
-            throw Error('param name duplicate');
-        this.paramNameIndexMap.set(paramName,this.params.length);
+        // if(this.paramNameIndexMap.has(paramName))
+        //     throw Error('param name duplicate');
+        // this.paramNameIndexMap.set(paramName,this.params.length);
         if(typeof paramBuilder ==='string') {
 
             this.params.push(ParamLibrary.getBuilder(paramBuilder)?.build(paramName,paramType,paramRef,paramValue)!);
@@ -173,19 +174,21 @@ export class InOutParams {
         return this;
     }
 
-    removeParam(paramName:string){
-        const index = this.paramNameIndexMap.get(paramName);
-        if(index!=undefined){
-            this.paramNameIndexMap.delete(paramName);
-            this.params.splice(index,1);
-        }
-    }
+    // removeParam(paramName:string){
+    //     const index = this.paramNameIndexMap.get(paramName);
+    //     if(index!=undefined){
+    //         this.paramNameIndexMap.delete(paramName);
+    //         this.params.splice(index,1);
+    //     }
+    // }
 
-    pop(){
-        if(this.params.length>0){
-            const paramName = this.params[this.params.length-1].paramName;
-            this.removeParam(paramName);
-        }
+    pop():BaseParam | undefined{
+        // if(this.params.length>0){
+        //     const paramName = this.params[this.params.length-1].paramName;
+        //     this.removeParam(paramName);
+        // }
+        
+        return this.params.pop();
     }
 
     toJSON():object{
@@ -245,12 +248,18 @@ export class TestGraph {
     }
 
     removeConnection(fromNode:string,fromParam:number,toNode:string,toParam:number){
+        // console.log(fromNode,fromParam,toNode,toParam);
         // 查找在output中该记录位置
-        const fromIndex = this.nameNodeMap.get(fromNode)?.outputs.params[fromParam].paramRef!.indexOf(toNode +'$'+toParam);
-        this.nameNodeMap.get(fromNode)!.outputs.params[fromParam].paramRef!.splice(fromIndex!,1);
+        if(this.nameNodeMap.get(fromNode)?.outputs.params[fromParam]){
+            // 如果是可变数量参数，在变动中，可能已被删除
+            const fromIndex = this.nameNodeMap.get(fromNode)?.outputs.params[fromParam].paramRef!.indexOf(toNode +'$'+toParam);
+            this.nameNodeMap.get(fromNode)!.outputs.params[fromParam].paramRef!.splice(fromIndex!,1);
+        }
         // 查找在input中该记录位置
-        const toIndex = this.nameNodeMap.get(toNode)?.inputs.params[toParam].paramRef!.indexOf(fromNode + '$' + fromParam);
-        this.nameNodeMap.get(toNode)!.inputs.params[toParam].paramRef!.splice(toIndex!,1);
+        if(this.nameNodeMap.get(toNode)?.inputs.params[toParam]){
+            const toIndex = this.nameNodeMap.get(toNode)?.inputs.params[toParam].paramRef!.indexOf(fromNode + '$' + fromParam);
+            this.nameNodeMap.get(toNode)!.inputs.params[toParam].paramRef!.splice(toIndex!,1);
+        }
     }
 
     /**
@@ -362,7 +371,9 @@ export enum CategoryEnums {
     WebType = "WebType",                // 网络测试节点
     SerialType = "SerialType",          // 串口测试节点
     FlowType = "FlowType",              // 流程控制节点
-    CalculateType = "CalculateType",              // 数理运算节点
+    CalculateType = "CalculateType",    // 数理运算节点
+    AssertType = "AssertType",          // 断言节点
+    ExtensionType = "ExtensionType",    // 其他扩展节点
 }
 
 
@@ -959,6 +970,95 @@ export class SleepNode {
     }
 }
 
+// 流程断言：该断言节点被执行即为测试失败
+export class FlowAssertNode {
+    static categoryName = CategoryEnums.AssertType;
+    static typeName = FlowAssertNode.name;
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(FlowParam,"prev");
+        const outputs = new InOutParams();
+        const temp = new BaseNode(nodeName
+            ,inputs
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,FlowAssertNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
+
+// 结构断言，输入数据结构一致断言通过
+export class StructureAssertNode {
+    static categoryName = CategoryEnums.AssertType;
+    static typeName = StructureAssertNode.name;
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"data")
+            .addParam(VariableParam,"example");
+        const outputs = new InOutParams();
+            outputs.addParam(FlowParam,"next");
+        const temp = new BaseNode(nodeName
+            ,inputs
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,StructureAssertNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
+
+// 数据断言，数据完全一致为通过
+export class DataAssertNode {
+    static categoryName = CategoryEnums.AssertType;
+    static typeName = DataAssertNode.name;
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"data")
+            .addParam(VariableParam,"example");
+        const outputs = new InOutParams();
+            outputs.addParam(FlowParam,"next");
+        const temp = new BaseNode(nodeName
+            ,inputs
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,DataAssertNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
+
+export class PythonNode {
+    static categoryName = CategoryEnums.ExtensionType;
+    static typeName = PythonNode.name;
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"script")
+            .addParam(VariableParam,"args");
+        const outputs = new InOutParams()
+            .addParam(FlowParam,"next")
+            .addParam(VariableParam,"data")
+        const temp = new BaseNode(nodeName
+            ,inputs
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,PythonNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
+
 // ====================== 实用工具 ====================== 
 // 默认翻译
 export const basicNodeTranslate:Map<string,string> = new Map();
@@ -1188,8 +1288,9 @@ class ImportExportProtocol {
         // 导出发布模块：从当前图中安全地去除ModuleBeginNode的前驱和ModuleEndNode的后继
         // 需要做一些基础检查工作，保证模块能作为整体执行，但执行情况无法保证（停机问题？）
         //          1.有且仅有一对儿ModuleBegin/EndNode（保证一个进入点和一个推出点）
-        //          2.ModuleBeginNode的递归前驱集合A，后继只能在A中或是ModuleBeginNode（保证模块内部数据仅依赖ModuleBeginNode）
-        //          3.和2相反同理，ModuleEndNod递归后继集合B，其前驱只能在B中或者是ModuleEndNode（保证模块结果都输出到ModuleEndNode）
+        //          2.求ModuleBeginNode的前置集合A，A中节点的后继只能在A中或是ModuleBeginNode（保证模块内部数据仅依赖ModuleBeginNode）
+        //          3.和2相反同理，ModuleEndNod后置集合B，其前驱只能在B中或者是ModuleEndNode（保证模块结果都输出到ModuleEndNode）
+        // 对2、3的集合的解释：ModuleBeginNode前置集合A，是ModuleBeginNode的前驱，及其从前驱扩展得到的最大联通子图（所有连接视为无向边），后置集合同理。
         if(graph==undefined){
             throw Error('graph not exist');
         }
@@ -1217,6 +1318,19 @@ class ImportExportProtocol {
             queue.splice(0,1);
             // 所有inputParam的所有paramRef
             for(let param of graph!.nameNodeMap.get(nodeName)!.inputs.params){
+                for(let paramRef of param.paramRef){
+                    const preName = paramRef.split('$')[0];
+                    if(!predecessorMap.has(preName)){
+                        queue.push(preName);
+                        predecessorMap.add(preName);
+                    }
+                }
+            }
+            if(nodeName==beginName!){
+                // ModuleBeginNode不考虑后继，其他节点的后继也放到集合中
+                continue;
+            }
+            for(let param of graph!.nameNodeMap.get(nodeName)!.outputs.params){
                 for(let paramRef of param.paramRef){
                     const preName = paramRef.split('$')[0];
                     if(!predecessorMap.has(preName)){
@@ -1257,6 +1371,19 @@ class ImportExportProtocol {
                     }
                 }
             }
+            if(nodeName==endName!){
+                // ModuleEndNode不考虑前驱，其他节点的前驱也放到集合中
+                continue;
+            }
+            for(let param of graph!.nameNodeMap.get(nodeName)!.inputs.params){
+                for(let paramRef of param.paramRef){
+                    const preName = paramRef.split('$')[0];
+                    if(!successorMap.has(preName)){
+                        queue.push(preName);
+                        successorMap.add(preName);
+                    }
+                }
+            }
         }
         for(let nodeName of successorMap){
             if(nodeName===endName!)
@@ -1266,6 +1393,7 @@ class ImportExportProtocol {
                 for(let paramRef of param.paramRef){
                     const preName = paramRef.split('$')[0];
                     if(!successorMap.has(preName)){
+                        console.log(preName);
                         throw Error("successor invalid");
                     }
                 }
@@ -1288,11 +1416,14 @@ class ImportExportProtocol {
 
 
 // ====================== 加载时执行 ====================== 
-basicNodeTranslate.set("CommonType","通用节点");
-basicNodeTranslate.set("WebType","网络测试节点");
-basicNodeTranslate.set("SerialType","串口测试节点");
-basicNodeTranslate.set("FlowType","流程控制节点");
-basicNodeTranslate.set("CalculateType","数理逻辑运算节点");
+basicNodeTranslate.set(CategoryEnums.CommonType,"通用节点");
+basicNodeTranslate.set(CategoryEnums.WebType,"网络测试节点");
+basicNodeTranslate.set(CategoryEnums.SerialType,"串口测试节点");
+basicNodeTranslate.set(CategoryEnums.FlowType,"流程控制节点");
+basicNodeTranslate.set(CategoryEnums.CalculateType,"数理逻辑运算节点");
+
+basicNodeTranslate.set(CategoryEnums.AssertType,"断言节点");
+basicNodeTranslate.set(CategoryEnums.ExtensionType,"其他扩展节点");
 
 basicNodeTranslate.set("BeginNode","测试起始节点");
 basicNodeTranslate.set("EndNode","测试终止节点");
@@ -1326,12 +1457,21 @@ basicNodeTranslate.set("NotNode","逻辑非节点");
 basicNodeTranslate.set("BarrierNode","栅栏节点")
 basicNodeTranslate.set("SleepNode","睡眠节点")
 
+basicNodeTranslate.set(FlowAssertNode.name,"流程断言节点")
+basicNodeTranslate.set(StructureAssertNode.name,"结构断言节点")
+basicNodeTranslate.set(DataAssertNode.name,"数据断言节点")
+basicNodeTranslate.set(PythonNode.name,"Python脚本节点")
 
 NodeFactory.loadNodeLibrary(BeginNode);
 NodeFactory.loadNodeLibrary(EndNode);
 NodeFactory.loadNodeLibrary(LogNode);
 NodeFactory.loadNodeLibrary(ExtractNode);
 NodeFactory.loadNodeLibrary(MergeNode);
+
+NodeFactory.loadNodeLibrary(FlowAssertNode);
+NodeFactory.loadNodeLibrary(StructureAssertNode);
+NodeFactory.loadNodeLibrary(DataAssertNode);
+
 // 暂时废弃
 // NodeFactory.loadNodeLibrary(GlobalNode)
 NodeFactory.loadNodeLibrary(SendNode);
@@ -1355,10 +1495,9 @@ NodeFactory.loadNodeLibrary(NotNode);
 NodeFactory.loadNodeLibrary(BarrierNode);
 NodeFactory.loadNodeLibrary(VariableNode);
 NodeFactory.loadNodeLibrary(SleepNode);
+NodeFactory.loadNodeLibrary(PythonNode);
 
 // 模块实现
-
-
 export class ModuleFlowParam {
     static readonly typeName: string = ModuleFlowParam.name
     static readonly categoryNames: Array<ParamCategoryEnums>=[ParamCategoryEnums.Flow];
@@ -1456,7 +1595,7 @@ export class BaseModule extends BaseNode {
             let param = internalGraph.nameNodeMap.get(endName)?.inputs.params[i];
             if(i==0){
                 // flow param
-                output.addParam(ModuleFlowParam,'prev');
+                output.addParam(ModuleFlowParam,'next');
             } else {
                 // data param
                 output.addParam(ModuleDataParam,param?.paramName!);

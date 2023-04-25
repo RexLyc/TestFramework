@@ -57,10 +57,12 @@ function mousedown(event) {
             <el-sub-menu v-bind:key="item" :index="item.index" v-if="item.children!=undefined && item.children.length!=0">
                 <template #title>
                     <el-icon v-if="item.index==tn.CategoryEnums.CommonType"><Star/></el-icon>
+                    <el-icon v-else-if="item.index==tn.CategoryEnums.AssertType"><Odometer /></el-icon>
                     <el-icon v-else-if="item.index==tn.CategoryEnums.WebType"><MostlyCloudy/></el-icon>
                     <el-icon v-else-if="item.index==tn.CategoryEnums.FlowType"><Switch/></el-icon>
                     <el-icon v-else-if="item.index==tn.CategoryEnums.SerialType"><Link/></el-icon>
                     <el-icon v-else-if="item.index==tn.CategoryEnums.CalculateType"><EditPen/></el-icon>
+                    <el-icon v-else-if="item.index==tn.CategoryEnums.ExtensionType"><More/></el-icon>
                     <span>{{tn.NodeTranslator.translate(item.index)}}</span>
                     <!-- <span>{{ item.index }}</span> -->
                 </template>
@@ -95,6 +97,10 @@ function mousedown(event) {
                         <el-icon v-else-if="item2.index==tn.BarrierNode.typeName"><Aim /></el-icon>
                         <el-icon v-else-if="item2.index==tn.VariableNode.typeName"><Flag /></el-icon>
                         <el-icon v-else-if="item2.index==tn.SleepNode.typeName"><Moon /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.FlowAssertNode.typeName"><Switch /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.StructureAssertNode.typeName"><Menu /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.DataAssertNode.typeName"><Grid /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.PythonNode.name"><Link /></el-icon>
                         <span :id="item2.index">{{tn.NodeTranslator.translate(item2.index)}}</span>
                         <!-- <span>{{ item2.index }}</span> -->
                     </el-menu-item>
