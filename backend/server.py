@@ -5,6 +5,7 @@ from flask_socketio import SocketIO, emit
 # 其他依赖库
 import json
 import sqlite3
+import logging
 # 服务导入
 from service.TestService import TestService
 from service.SaveService import SaveService,SaveResponse,SaveResponseType
@@ -36,9 +37,9 @@ def getServerSave():
     # 必须添加异常处理，否则会无法返回CORS
     try:
         jsonData = request.get_data()
-        print('get serverSave query: {}'.format(jsonData))
+        logging.info('get serverSave query: {}'.format(jsonData))
         query = json.loads(jsonData)
-        print('get query {}'.format(query))
+        logging.info('get query {}'.format(query))
         if query is None or len(list(query))==0:
             # 返回整体信息列表
             resp.data = json.dumps(SaveService.getAllSaveInfo())
@@ -47,7 +48,7 @@ def getServerSave():
             resp.data = json.dumps(SaveService.getSave(query))
     except Exception as err:
         resp.data = json.dumps(SaveResponse(SaveResponseType.EXCEPTION,'{}'.format(err)))
-    print(resp)
+    logging.info(resp)
     return resp
 
 @app.route('/saveCategory',methods=['post'])
@@ -57,7 +58,7 @@ def getCategory():
         resp.data = json.dumps(SaveResponse(SaveResponseType.SUCCESS,SaveService.getCategory()))
     except Exception as err:
         resp.data = json.dumps(SaveResponse(SaveResponseType.EXCEPTION,'{}'.format(err)))
-    print(resp)
+    logging.info(resp)
     return resp
 
 @app.route('/uploadSave',methods=['post'])
@@ -65,18 +66,18 @@ def uploadSave():
     resp = buildBaseResp()
     try:
         jsonData = request.get_data()
-        print('get serverSave query: {}'.format(jsonData))
+        logging.info('get serverSave query: {}'.format(jsonData))
         saveParam = json.loads(jsonData)
-        print(saveParam)
+        logging.info(saveParam)
         resp.data = json.dumps(SaveService.addSave(saveParam['form']['save_name']
                                                    ,saveParam['form']['typeValue']
                                                    ,saveParam['form']['categoryValue']
                                                    ,saveParam['form']['description']
                                                    ,saveParam['data']))
     except Exception as err:
-        print(type(err))
+        logging.info(type(err))
         resp.data = json.dumps(SaveResponse(SaveResponseType.EXCEPTION,'{}'.format(err)))
-    print(resp)
+    logging.info(resp)
     return resp
 
 @app.route('/deleteSave',methods=['post'])
@@ -84,14 +85,14 @@ def deleteSave():
     resp = buildBaseResp()
     try:
         jsonData = request.get_data()
-        print('get serverSave query: {}'.format(jsonData))
+        logging.info('get serverSave query: {}'.format(jsonData))
         deleteNames = json.loads(jsonData)
-        print(deleteNames)
+        logging.info(deleteNames)
         SaveService.deleteSave(deleteNames)
         resp.data = json.dumps(SaveResponse(SaveResponseType.SUCCESS))
     except Exception as err:
         resp.data = json.dumps(SaveResponse(SaveResponseType.EXCEPTION,'{}'.format(err)))
-    print(resp)
+    logging.info(resp)
     return resp
 
 # ==================================== 基础消息 ====================================
@@ -99,54 +100,55 @@ ws_namespace = '/websocket'
 # 连接处理
 @socketio.on(message='connect',namespace=ws_namespace)
 def on_connect(message):
-    print("client connected. {}".format(request.sid))
+    logging.info("client connected. {}".format(request.sid))
     # socketio.emit('connect', {'data': 'connect'},namespace=ws_namespace)
 
 # 连接断开处理
 @socketio.on('disconnect', namespace=ws_namespace)
 def on_disconnect():
-    print('client disconnected.')
+    logging.info('client disconnected.')
 
 # 连接错误处理
 @socketio.on('error', namespace=ws_namespace)
 def on_error():
-    print('client connect error.')
+    logging.info('client connect error.')
 
 # ==================================== 自定义消息 ====================================
 # 心跳
 @socketio.on(MessageType.PING.value, namespace=ws_namespace)
 def on_ping(message):
-    print('client ping')
-    print(socketio)
+    logging.info('client ping')
+    logging.info(socketio)
     emit(MessageType.PING.value, {}, namespace = ws_namespace)
 
 # 提交测试图
 @socketio.on(MessageType.SUBMIT.value,namespace=ws_namespace)
 def on_submit(message):
-    print('get test graph submit {}'.format(message))
+    logging.info('get test graph submit {}'.format(message))
     result = TestService.submit(message['msgData'],request.sid)
     emit(MessageType.SUBMIT.value,result,to=request.sid)
 
 @socketio.on(MessageType.TEST_RESULT.value,namespace=ws_namespace)
 def on_test_result(message):
-    print('query test result {}'.format(message['msgData']))
+    logging.info('query test result {}'.format(message['msgData']))
     result = TestService.getTestResult(message,request.sid)
     emit(MessageType.TEST_RESULT.value,result,to=request.sid)
 
 @socketio.on(MessageType.TEST_STATE.value,namespace=ws_namespace)
 def on_test_state(message):
-    print('query test state {}'.format(message))
+    logging.info('query test state {}'.format(message))
     result = TestService.getTestState(message['msgData'],request.sid)
     emit(MessageType.TEST_STATE.value,result,to=request.sid)
 
 @socketio.on(MessageType.TEST_COMMAND.value,namespace=ws_namespace)
 def on_test_command(message):
-    print('command test {}'.format(message))
+    logging.info('command test {}'.format(message))
     result = TestService.setTestCommand(message['msgData'],request.sid)
     emit(MessageType.TEST_COMMAND.value,result,to=request.sid)
 
 if __name__ == '__main__':
     # app.run(debug=True)
+    logging.basicConfig(filename="server.log", filemode="a", format="%(asctime)s %(name)s:%(levelname)s:%(message)s", datefmt="%d-%M-%Y %H:%M:%S", level=logging.DEBUG)
     MessageService.initSocket(socketio,ws_namespace)
     SaveService.init()
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)

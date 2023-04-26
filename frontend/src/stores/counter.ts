@@ -14,7 +14,7 @@ export const useCounterStore = defineStore('counter', () => {
 
 export const usePressElementStore = defineStore('currentPressedElement',()=>{
   const currentPressedElement = ref()
-  function setCurrent(element:HTMLElement) {
+  function setCurrent(element:HTMLElement|null) {
     currentPressedElement.value = element;
   }
 

@@ -8,7 +8,7 @@ import { onMounted, ref, watch } from 'vue';
 import { Codemirror } from 'vue-codemirror';
 import { python } from '@codemirror/lang-python';
 
-const form= ref(new tn.BaseNode('',{params:[]},{params:[]},0,0,'',{},'???'));
+const form= ref(new tn.BaseNode('',new tn.InOutParams(),new tn.InOutParams(),0,0,'',{},'INVALID'));
 
 const shown =ref(false);
 

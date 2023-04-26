@@ -375,7 +375,7 @@ const handleDeleteServerSavae = (event:any)=>{
 <template>
   <el-row class="row-bg" justify="space-between">
     <el-col :span="6">
-      <img style="max-height: 60px;" src="favicon.ico" object-fit="scale-down"/>
+      <img style="max-height: 60px;" src="../assets/chart-test.png" object-fit="scale-down"/>
     </el-col>
     <el-col :span="6">
     </el-col>

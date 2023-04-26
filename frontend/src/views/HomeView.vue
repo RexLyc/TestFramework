@@ -20,7 +20,7 @@ const posY = ref()
 const pressedElementStore = usePressElementStore();
 const beginDrag = ref(new Boolean(false));
 const beginPressed = ref(new Boolean(false));
-const dragDiv = ref(null)
+const dragDiv = ref()
 document.onmousedown=(event:MouseEvent)=>{
   if(event.button==2) // 不处理右键
     return true;
@@ -45,8 +45,8 @@ document.onmouseup=(event)=>{
   }
   beginDrag.value=beginPressed.value=false;
   pressedElementStore.setCurrent(null);
-  if(dragDiv.value!==null){
-    dragDiv.value.remove();
+  if(dragDiv.value){
+    (dragDiv.value as Element).remove();
   }
   dragDiv.value=null;
   // return false; //避免选中文本

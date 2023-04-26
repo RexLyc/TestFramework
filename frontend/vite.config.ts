@@ -11,5 +11,12 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
-  }
+  },
+  // 指示index.html中使用相对路径寻址
+  base:'./',
+  // 禁止变动描述符、类名称
+  esbuild: {
+    minifyIdentifiers: false,
+    keepNames: true,
+  },
 })

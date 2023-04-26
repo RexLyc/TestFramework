@@ -18,7 +18,7 @@ class NodeMenuItem {
 
 onMounted(()=>{
     // 加载全部的节点
-    const categorySet = new Map<string,Array<tn.NodeInterface>>();
+    const categorySet = new Map<string,Array<tn.NodeBuilder>>();
     for(let type of tn.NodeFactory.nodeTypeMap.values()){
         if(!categorySet.get(type.categoryName))
             categorySet.set(type.categoryName,new Array());
@@ -34,7 +34,7 @@ onMounted(()=>{
     }
 })
 
-function mousedown(event) {
+function mousedown(event:any) {
     pressedElementStore.setCurrent(event.target);
 }
 

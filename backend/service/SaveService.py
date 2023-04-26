@@ -2,6 +2,7 @@
 from enum import Enum
 import sqlite3 as sql
 import os
+import logging
 
 FRAMEWORK_DATABASE_PATH = './test_framework.db'
 FRAMEWORK_DATA_DIR      = './data'
@@ -51,15 +52,15 @@ class DBUtils:
         for key,value in kwargs.items():
             names+='`'+key+'`,'
             values+="'"+value+"',"
-            print(key,values)
+            logging.info(key,values)
         sqlStatement= 'insert into {} ({}) values({})'.format(table,names[:-1],values[:-1])
-        print(sqlStatement)
+        logging.info(sqlStatement)
         return conn.execute(sqlStatement)
     
     @staticmethod
     def delete(conn,table,where):
         sqlStatement = 'delete from {} {}'.format(table,where)
-        print(sqlStatement)
+        logging.info(sqlStatement)
         conn.execute(sqlStatement)
 
 
@@ -75,7 +76,7 @@ class SaveService:
 
     @staticmethod
     def getAllSaveInfo():
-        print('get all save info')
+        logging.info('get all save info')
         with sql.connect(FRAMEWORK_DATABASE_PATH) as conn:
             cursor = DBUtils.queryOrCreate(conn,'save_info')
             result = []
@@ -85,7 +86,7 @@ class SaveService:
 
     @staticmethod
     def getSave(saveNames):
-        print('get save: {}'.format(saveNames))
+        logging.info('get save: {}'.format(saveNames))
         nameTypeMap = {}
         with sql.connect(FRAMEWORK_DATABASE_PATH) as conn:
             cursor = DBUtils.queryOrCreate(conn,'save_info')
@@ -109,7 +110,7 @@ class SaveService:
 
     @staticmethod
     def addSave(save_name,type,category,description,jsonGraph):
-        print('add save: {} {} {} {} {}'.format(save_name,type,category,description,jsonGraph))
+        logging.info('add save: {} {} {} {} {}'.format(save_name,type,category,description,jsonGraph))
         with sql.connect(FRAMEWORK_DATABASE_PATH) as conn:
             cursor = DBUtils.insert(conn,'save_info',save_name=save_name,type=type,category=category,description=description)
             fo = open(FRAMEWORK_SAVE_DIR+'/'+save_name+'.json', "w")
@@ -119,7 +120,7 @@ class SaveService:
 
     @staticmethod
     def deleteSave(deleteNames):
-        print('delete save: {}'.format(deleteNames))
+        logging.info('delete save: {}'.format(deleteNames))
         with sql.connect(FRAMEWORK_DATABASE_PATH) as conn:
             names = ''
             for i in deleteNames:
@@ -131,8 +132,8 @@ class SaveService:
             for i in deleteNames:
                 os.remove(FRAMEWORK_SAVE_DIR+'/'+i+'.json')
         except Exception as err:
-            print(err)
-        print(cursor)
+            logging.info(err)
+        logging.info(cursor)
         pass
 
     @staticmethod

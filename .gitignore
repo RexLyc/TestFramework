@@ -30,3 +30,6 @@ coverage
 
 *.db
 data/
+
+electron/dep/
+electron/data/

@@ -1,5 +1,6 @@
 from graph.Component import TestPlanFactory,TestExecutor,TestIncompatibleError,TestRuntimeError,TestError,RunResult
 from .MessageService import *
+import logging
 
 class SubmitResultType(Enum):
     SUCCESS      = 0
@@ -31,15 +32,15 @@ class TestService:
 
     @staticmethod
     def setTestCommand(command,sid):
-        print('recv command from sid: {} testUUID: {} command: {}'.format(sid,command['testUUID'],command['command']))
+        logging.info('recv command from sid: {} testUUID: {} command: {}'.format(sid,command['testUUID'],command['command']))
         result = False
         message = ""
         try:
             (result,message) = TestExecutor.controlTestTask(sid,uuid.UUID(hex=command['testUUID']),command['command'])
         except Exception or RuntimeError as err:
-            print(err)
+            logging.info(err)
             message = "{}".format(err)
-            print('control failed: ',message)
+            logging.info('control failed: ',message)
         return MessageBody(msgType=MessageType.TEST_COMMAND,msgData={"result":result,"message":message})
 
     @staticmethod
@@ -51,8 +52,8 @@ class TestService:
             TestExecutor.submitTestTask(testPlan, lambda future:TestService._task_done(future,testPlan.testParam.testUUID))
             return MessageBody(msgType=MessageType.SUBMIT,msgData=SubmitResponse(SubmitResultType.SUCCESS,testPlan.testParam.testUUID,'test running...'))
         except TestIncompatibleError as err:
-            print('submit TestIncompatibleError {}'.format(err))
+            logging.info('submit TestIncompatibleError {}'.format(err))
             return MessageBody(msgType=MessageType.SUBMIT,msgData=SubmitResponse(SubmitResultType.INCOMPATIBLE,message='{}'.format(err)))
         except Exception as err:
-            print('submit Exception {}'.format(err))
+            logging.info('submit Exception {}'.format(err))
             return MessageBody(msgType=MessageType.SUBMIT,msgData=SubmitResponse(SubmitResultType.EXCEPTION,message='{}'.format(err)))

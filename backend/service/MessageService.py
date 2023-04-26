@@ -5,6 +5,7 @@ import time
 import uuid
 from enum import Enum
 from flask_socketio import SocketIO, emit
+import logging
 
 # 消息类型
 class MessageType(Enum):
@@ -127,7 +128,7 @@ class MessageService:
 
     @staticmethod
     def subscribe(consumerId,testPlanUUID):
-        print('consumerId: {} subscribe testPlan: {}'.format(consumerId,testPlanUUID))
+        logging.info('consumerId: {} subscribe testPlan: {}'.format(consumerId,testPlanUUID))
         # 指定消费者订阅测试计划
         if consumerId not in MessageService.consumerMap:
             MessageService.consumerMap[consumerId]=GraphOfConsumer(consumerId)
@@ -154,7 +155,7 @@ class MessageService:
     
     @staticmethod
     def consumeAck(testPlanUUID,sid):
-        print('consumeAck {} {}'.format(testPlanUUID,sid))
+        logging.info('consumeAck {} {}'.format(testPlanUUID,sid))
         MessageService.testPlanMap[testPlanUUID].consumeAck(id)
         MessageService.consumerMap[sid].consumeAck(testPlanUUID)
 
@@ -167,9 +168,9 @@ class MessageService:
             consumerIds = MessageService.testPlanMap[testPlanUUID].getAllIndex()
         # 推送
         for id in consumerIds:
-            print('catch up for consumer: {} testPlan: {}'.format(id,testPlanUUID))
+            logging.info('catch up for consumer: {} testPlan: {}'.format(id,testPlanUUID))
             for msg in MessageContainer.getMessages(testPlanUUID,consumerIds[id]):
-                print('send msg : {} {}'.format(msg.messageBody.msgType,msg.messageBody))
+                logging.info('send msg : {} {}'.format(msg.messageBody.msgType,msg.messageBody))
                 MessageService.socket.emit(msg.messageBody.msgType,msg.messageBody
                                            ,namespace=MessageService.namespace
                                            ,to=id

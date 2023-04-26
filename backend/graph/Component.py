@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 import uuid
 import os
 from threading import Event
+import logging
 
 class ExitStateEnum(Enum):
     # 正常结束
@@ -99,7 +100,7 @@ class Tools:
     def log(global_data,logData,loggerName='Default'):
         if isinstance(logData,bytes):
             logData = logData.hex(sep=' ',bytes_per_sep=1)
-        print('logging {}'.format(logData))
+        logging.info('logging {}'.format(logData))
         if '$$log' not in global_data:
             global_data['$$log'] = ''
         global_data['$$log'] = global_data['$$log'] + '{}({}): {}\n'.format(loggerName,time.time(),logData)
@@ -115,7 +116,7 @@ class Tools:
         try:
             websocket = await websockets.connect(url)
         except ConnectionRefusedError as e:
-            print('ws refuse {}'.format(e))
+            logging.info('ws refuse {}'.format(e))
         return websocket
 
     @staticmethod
@@ -123,14 +124,14 @@ class Tools:
         try:
             return await asyncio.wait_for(websocket.recv(),timeout)
         except asyncio.TimeoutError as err:
-            print('websocket recv timeout: {}'.format(err))
+            logging.info('websocket recv timeout: {}'.format(err))
 
     @staticmethod
     async def sendWebsocket(websocket,dataBody,timeout):
         try:
             return await asyncio.wait_for(websocket.send(dataBody),timeout)
         except asyncio.TimeoutError as err:
-            print('websocket send timeout: {}'.format(err))
+            logging.info('websocket send timeout: {}'.format(err))
 
     @staticmethod
     def createSeralFile(name,baudrate,parity='N',bytesize=8,stopbits=1):
@@ -314,7 +315,7 @@ class ConstantNode(BaseNode):
                 # bool 类型比较特殊, bool("0")为false，需要先转一下
                 self.outputs[i]['paramValue']=int(self.outputs[i]['paramValue'])
             temp = runType(self.outputs[i]['paramValue'])
-            print('constant setting: {} {}'.format(temp,type(temp)))
+            logging.info('constant setting: {} {}'.format(temp,type(temp)))
             data[self.name+'$'+str(i)] = runType(self.outputs[i]['paramValue'])
 
 class VariableNode(ConstantNode):
@@ -408,18 +409,18 @@ class RecvNode(BaseNode):
             try:
                 outputData = file.file.recv(4096)
             except socket.timeout as err:
-                print('timeout')
+                logging.info('timeout')
         elif isinstance(file,WebsocketFile):
             outputData = asyncio.get_event_loop().run_until_complete(Tools.recvWebsocket(file.file,timeout))
         elif isinstance(file,SerialFile):
             # TODO: 更好的串口数据读出方案（支持各种流式数据读取）
             # 等待数据准备完成
             t1 = time.time()
-            print(file.file)
+            logging.info(file.file)
             while file.file.inWaiting() == 0:
                 time.sleep(0.001)
                 if time.time()-t1 > timeout:
-                    print('timeout')
+                    logging.info('timeout')
                     break
             # 保证数据全部取出
             if file.file.inWaiting() !=0:
@@ -433,7 +434,7 @@ class RecvNode(BaseNode):
                     byte_number_2 = file.file.inWaiting()
                 # 一次性读取
                 outputData = file.file.read_all()
-            print('serial {}'.format(outputData))
+            logging.info('serial {}'.format(outputData))
         else:
             raise TestRuntimeError(self.name,'unsupport RecvNode file: {}'.format(file))
         data[self.name+'$1'] = outputData
@@ -450,7 +451,7 @@ class WebSocketNode(FileNode):
 class IfNode(BaseNode):
     def _post(self,data,testParam,prevNode):
         condition = data[self.inputs[1]['paramRef'][0]]
-        print(condition)
+        logging.info(condition)
         next = []
         if condition==True:
             for nextNode in self.outputs[0]['paramRef']:
@@ -506,11 +507,11 @@ class OrNode(BaseNode):
 
 class NotNode(BaseNode):
     def _run(self,data,testParam,prevNode):
-        print("?")
+        logging.info("?")
         inputCondition = data[self.inputs[1]['paramRef'][0]]
-        print("?")
+        logging.info("?")
         data[self.name+'$1'] = (not inputCondition)
-        print("?")
+        logging.info("?")
 
 class BarrierNode(BaseNode):
     def __init__(self, graph_node):
@@ -538,7 +539,7 @@ class SwitchNode(BaseNode):
     def _post(self,data,testParam,prevNode):
         testData = data[self.inputs[1]['paramRef'][0]]
         for i in range(2,len(self.inputs)):
-            print('{} {}'.format(2,len(self.inputs)))
+            logging.info('{} {}'.format(2,len(self.inputs)))
             tempTestData = testData
             if type(tempTestData) != type(data[self.inputs[i]['paramRef'][0]]):
                 # 类型不相等，需要进行处理
@@ -582,7 +583,7 @@ class ModuleEndNode(BarrierNode):
 class CommonModuleNode(BaseNode):
     def __init__(self, graph_node):
         super().__init__(graph_node)
-        print(graph_node['internalGraph']['nameNodeMap'])
+        logging.info(graph_node['internalGraph']['nameNodeMap'])
         self.internalGraph = TestGraphFactory.buildGraphFromNameNodeMap(graph_node['internalGraph']['nameNodeMap'])
         # startName beginName需要重新计算
         for nodeName in self.internalGraph.nodes:
@@ -597,7 +598,7 @@ class CommonModuleNode(BaseNode):
         # 传递输入，直接将CommonModuleNode的依赖传递到ModuleBeginNode.outputs位置
         for inParam in range(1,len(self.inputs)):
             self.internalGraph.global_data[self.internalGraph.startName+'$'+str(inParam)]=data[self.inputs[inParam]['paramRef'][0]]
-        print(self.internalGraph.global_data)
+        logging.info(self.internalGraph.global_data)
         # 执行子图
         internalResult = self.internalGraph.run(testParam,True)
         # 合并日志
@@ -625,8 +626,8 @@ class DataAssertNode(BaseNode):
         # 对输入数据进行JSON反序列化并递归判断
         dataObject = json.loads(data[self.inputs[1]['paramRef'][0]])
         exampleObject = json.loads(data[self.inputs[2]['paramRef'][0]])
-        print('data obj {}'.format(dataObject))
-        print('example obj {}'.format(exampleObject))
+        logging.info('data obj {}'.format(dataObject))
+        logging.info('example obj {}'.format(exampleObject))
         if Tools.jsonDataCompare(dataObject,exampleObject) == False:
             raise TestStructureAssertError(self.name,'json data not match')
 
@@ -635,7 +636,7 @@ class PythonNode(BaseNode):
         # 将输入数据作为python脚本，在新进程中启动
         script = data[self.inputs[1]['paramRef'][0]]
         args = data[self.inputs[2]['paramRef'][0]]
-        execArgs = {'__builtins__':{'print':print
+        execArgs = {'__builtins__':{'logging.info':logging.info
                                     ,'list':list
                                     ,'set':set
                                     ,'dict':dict
@@ -683,7 +684,7 @@ class NodeFactory:
         if graph_node['typeName'] in NodeFactory.nodeLibaries:
             return NodeFactory.nodeLibaries[graph_node['typeName']](graph_node=graph_node)
         else:
-            print('unsupport node: {},pass'.format(graph_node['typeName']))
+            logging.info('unsupport node: {},pass'.format(graph_node['typeName']))
             raise TestIncompatibleError(msg='unsupport node: {}'.format(graph_node['typeName']))
 
 NodeFactory.nodeRegister(BeginNode)
@@ -756,9 +757,9 @@ class TestGraph:
                 
                 # 继续执行
                 (prevNode,currentNode) = self.runQueue.get()
-                print('{} running'.format(currentNode.name))
+                logging.info('{} running'.format(currentNode.name))
                 nextNodes, isValid = currentNode.doRun(self.global_data,testParam,prevNode)
-                print('next: {}, isValid: {}'.format(nextNodes,isValid))
+                logging.info('next: {}, isValid: {}'.format(nextNodes,isValid))
                 if isValid:
                     for node in nextNodes:
                         self.runQueue.put((currentNode,self.nodes[node]))
@@ -829,7 +830,7 @@ class TestExecutor:
 
     @staticmethod
     def submitTestTask(testPlan:TestPlan,doneCallBack):
-        print("submitTestTask")
+        logging.info("submitTestTask")
         # 保存测试计划
         TestExecutor.testPlanMap[testPlan.testParam.testUUID]=testPlan
         # 保存Future
@@ -844,7 +845,7 @@ class TestExecutor:
     
     @staticmethod
     def controlTestTask(sid,testUUID,command):
-        print("controlTestTask")
+        logging.info("controlTestTask")
         if command=='kill':
             if testUUID not in TestExecutor.testFutureMap:
                 raise RuntimeError("testUUID not exist")
