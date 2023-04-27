@@ -37,7 +37,30 @@
         - [ ] 使用electron打包
 1. 持续：
     1. 完善文档和注释
-## 依赖
-- 前端
-    - codemirror、vue-codemirror
-- 后端
+## 构建
+1. Ubuntu
+```bash
+# git clone
+cd TestFramework
+git submodule update --init --recursive
+
+# frontend
+cd frontend
+npm install
+npm run dev
+npm run build-only
+
+# backend
+cd ../backend
+pip3 install logging flask flask_cors flask_socketio websockets pyserial eventlet pyinstaller
+python3 ./server.py
+pyinstaller server.spec
+
+# electron
+npm install
+npm run start
+```
+## 开发依赖
+- python3 (推荐>=3.8)
+- npm 9.2.0
+- nodejs v18.12.1

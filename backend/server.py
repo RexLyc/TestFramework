@@ -7,6 +7,7 @@ import json
 import sqlite3
 import logging
 import sys
+import os
 # 服务导入
 from service.TestService import TestService
 from service.SaveService import SaveService,SaveResponse,SaveResponseType
@@ -161,4 +162,5 @@ if __name__ == '__main__':
             isDebug = False
     # 设置use-reloader=False，避免在electron中无法彻底杀死
     logging.info('server run argv, isDebug: {}, isReloader: {}'.format(isDebug,isReloader))
+    logging.info('current pid: {}'.format(os.getpid()))
     socketio.run(app, host='0.0.0.0', port=5000, debug=isDebug, allow_unsafe_werkzeug=True,use_reloader=isReloader)
