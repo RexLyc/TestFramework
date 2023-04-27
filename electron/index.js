@@ -6,7 +6,7 @@ const treeKill = require("tree-kill");
 // const {PythonShell}  = require("python-shell")
 // // Declaring tree-kill
 const kill = require('tree-kill');
-
+const psTree = require('ps-tree');
 
 // 创建窗口
 function createWindow() {
@@ -32,7 +32,7 @@ function createWindow() {
 //     console.log('py server close ',err,exitCode,exitSignal)
 // })
 
-const pyProcess = require('child_process').spawn(path.join(__dirname,'/dep/backend/server.exe'),['no-reloader','no-debug'])
+const pyProcess = require('child_process').execFile(path.join(__dirname,'/dep/backend/server.exe'),['no-reloader','no-debug'],{cwd:process.cwd(),windowsHide:true})
 pyProcess.on('spawn',()=>{
     console.log('spawn one: ',pyProcess.pid)
 })
@@ -47,6 +47,13 @@ app.on('window-all-closed', () => {
     // pyShell.kill('SIGKILL')
     // pyProcess.kill('SIGKILL');
     console.log(pyProcess.pid)
-    kill(pyProcess.pid)
-    app.quit()
+    psTree(pyProcess.pid,(error,childs)=>{
+        for(const child of childs){
+            console.log('to kill child pid: ',child.PID);
+            process.kill(child.PID);
+        }
+        process.kill(pyProcess.pid)
+        app.quit()
+    })
+    // kill(-pyProcess.pid)
 })
