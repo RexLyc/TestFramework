@@ -6,6 +6,7 @@ from flask_socketio import SocketIO, emit
 import json
 import sqlite3
 import logging
+import sys
 # 服务导入
 from service.TestService import TestService
 from service.SaveService import SaveService,SaveResponse,SaveResponseType
@@ -148,7 +149,16 @@ def on_test_command(message):
 
 if __name__ == '__main__':
     # app.run(debug=True)
-    logging.basicConfig(filename="server.log", filemode="a", format="%(asctime)s %(name)s:%(levelname)s:%(message)s", datefmt="%d-%M-%Y %H:%M:%S", level=logging.DEBUG)
+    logging.basicConfig(filename="server.log", filemode="a", format="%(asctime)s %(name)s:%(levelname)s:%(message)s", datefmt="%Y-%m-%d %H:%M:%S", level=logging.DEBUG)
     MessageService.initSocket(socketio,ws_namespace)
     SaveService.init()
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
+    isReloader = True
+    isDebug = True
+    for i in sys.argv:
+        if i == 'no-reloader':
+            isReloader = False
+        elif i == 'no-debug':
+            isDebug = False
+    # 设置use-reloader=False，避免在electron中无法彻底杀死
+    logging.info('server run argv, isDebug: {}, isReloader: {}'.format(isDebug,isReloader))
+    socketio.run(app, host='0.0.0.0', port=5000, debug=isDebug, allow_unsafe_werkzeug=True,use_reloader=isReloader)

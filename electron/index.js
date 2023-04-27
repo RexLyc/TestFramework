@@ -4,7 +4,7 @@ const { app, BrowserWindow } = require("electron")
 // 从 python-shell 导入一个 PythonShell 对象 (注意大小写)
 const {PythonShell}  = require("python-shell")
 // Declaring tree-kill
-var kill = require('tree-kill');
+const { kill } = require('tree-kill');
 
 
 // 创建窗口
@@ -25,12 +25,14 @@ function createWindow() {
 }
 
 // 启动后端
-const pyShell = new PythonShell("./dep/backend/server.py",{mode:'text'});
+const pyShell = new PythonShell("./dep/backend/server.py",{mode:'text',args:["no-reloader",'no-debug']});
+pyShell.end((err,exitCode,exitSignal)=>{
+    console.log('py server close ',err,exitCode,exitSignal)
+})
 
 // 启动
 app.on("ready", createWindow)
 app.on('window-all-closed', () => {
-    // pyShell.kill('SIGINT')
-    kill(pyShell.childProcess.pid)
+    pyShell.kill('SIGKILL')
     app.quit()
 })
