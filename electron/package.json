@@ -32,6 +32,17 @@
         }
       ],
       "icon": "logo.png"
+    },
+    "linux": {
+      "target":[
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon":"icon.icns"
     }
   },
   "author": "rexlyc",

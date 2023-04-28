@@ -14,7 +14,7 @@ function createWindow() {
         // 设置一个宽为800, 高为600的窗口
         width: 800,
         height: 600,
-        icon: './logo.png'
+        icon: path.join(__dirname,'/logo.png')
     })
     
     
@@ -32,7 +32,15 @@ function createWindow() {
 //     console.log('py server close ',err,exitCode,exitSignal)
 // })
 
-const pyProcess = require('child_process').execFile(path.join(__dirname,'/dep/backend/server.exe'),['no-reloader','no-debug'],{cwd:process.cwd(),windowsHide:true})
+serverPath = ''
+if(process.platform == 'win32'){
+    serverPath=path.join(__dirname,'/dep/backend/server.exe')
+}
+else if(process.platform == 'linux'){
+    serverPath=path.join(__dirname,'/dep/backend/server')
+}
+
+const pyProcess = require('child_process').execFile(serverPath,['no-reloader','no-debug'],{cwd:process.cwd(),windowsHide:true})
 pyProcess.on('spawn',()=>{
     console.log('spawn one: ',pyProcess.pid)
 })
