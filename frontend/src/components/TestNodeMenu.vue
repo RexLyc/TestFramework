@@ -63,6 +63,7 @@ function mousedown(event:any) {
                     <el-icon v-else-if="item.index==tn.CategoryEnums.SerialType"><Link/></el-icon>
                     <el-icon v-else-if="item.index==tn.CategoryEnums.CalculateType"><EditPen/></el-icon>
                     <el-icon v-else-if="item.index==tn.CategoryEnums.ExtensionType"><More/></el-icon>
+                    <el-icon v-else-if="item.index==tn.CategoryEnums.GUIProcessType"><Monitor/></el-icon>
                     <span>{{tn.NodeTranslator.translate(item.index)}}</span>
                     <!-- <span>{{ item.index }}</span> -->
                 </template>
@@ -101,6 +102,8 @@ function mousedown(event:any) {
                         <el-icon v-else-if="item2.index==tn.StructureAssertNode.typeName"><Menu /></el-icon>
                         <el-icon v-else-if="item2.index==tn.DataAssertNode.typeName"><Grid /></el-icon>
                         <el-icon v-else-if="item2.index==tn.PythonNode.name"><Link /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.ScreenCaptureNode.name"><Picture /></el-icon>
+                        <el-icon v-else-if="item2.index==tn.OCRNode.name"><Reading /></el-icon>
                         <span :id="item2.index">{{tn.NodeTranslator.translate(item2.index)}}</span>
                         <!-- <span>{{ item2.index }}</span> -->
                     </el-menu-item>

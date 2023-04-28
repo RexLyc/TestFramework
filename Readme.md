@@ -52,7 +52,7 @@ npm run build-only
 
 # backend
 cd ../backend
-pip3 install logging flask flask_cors flask_socketio websockets pyserial eventlet pyinstaller
+pip3 install logging flask flask_cors flask_socketio websockets pyserial eventlet pyinstaller pyautogui easyocr
 python3 ./server.py
 pyinstaller server.spec
 

@@ -10,7 +10,7 @@ import { toNumber } from 'lodash';
 enum GraphRunStateEnum {
   UNKNOWN       = '未知',
   WAITING       = '等待',
-  PREPARING     = '准备',
+  PREPARING     = '准备中',
   RUNNING       = '运行中',
   SUCCESS       = '测试成功',
   FAILED        = '测试失败',
@@ -204,6 +204,8 @@ class ServerInfo{
     // TODO: 保存旧测试计划
     this.testUUID="";
     SocketIOUtil.send(this.address,new CommonMessage(CommonMessageType.SUBMIT,tn.TestGraphFactory.exportGraph(graphName)))
+    this.runState = GraphRunStateEnum.PREPARING;
+    this.log = '';    
   }
 
   updateLog(graphName:string){
@@ -354,7 +356,6 @@ const handleDelete = ()=>{
     serverTable.value.splice(serverTable.value.findIndex((value,index)=>{return value===select}),1);
   }
 }
-
 
 const multipleTableRef = ref<InstanceType<typeof ElTable>>()
 const multipleSelection = ref<ServerInfo[]>([])

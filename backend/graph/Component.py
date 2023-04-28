@@ -15,6 +15,9 @@ import uuid
 import os
 from threading import Event
 import logging
+import easyocr
+import pyautogui
+import numpy
 
 class ExitStateEnum(Enum):
     # 正常结束
@@ -267,7 +270,7 @@ class BaseNode:
     def __str__(self):
         return 'Type: {}, Id: {}'.format(self.__class__, self.name)
 
-    def _run(self,data,testParam,prevNode)->list:
+    def _run(self,data,testParam,prevNode):
         pass
     
     def _writeBack(self,data):
@@ -670,6 +673,24 @@ class PythonNode(BaseNode):
         exec(script.script, execArgs)
         data[self.name+'$1'] = execArgs['func'](args)
 
+class ScreenCaptureNode(BaseNode):
+    def _run(self, data, testParam, prevNode):
+        data[self.name+'$1'] = pyautogui.screenshot().convert('L')
+
+class OCRNode(BaseNode):
+    def __init__(self, graph_node):
+        super().__init__(graph_node)    
+        self.reader = easyocr.Reader(['ch_sim','en'])    
+
+    def _run(self, data, testParam, prevNode):
+        inputImage = numpy.asarray(data[self.inputs[1]['paramRef'][0]])
+        data[self.name+'$1'] = self.reader.readtext(inputImage)
+
+class MouseActionNode(BaseNode):
+    def _run(self, data, testParam, prevNode):
+        return super()._run(data, testParam, prevNode)
+        
+
 class NodeFactory:
     nodeLibaries = dict()
     @staticmethod
@@ -718,6 +739,8 @@ NodeFactory.nodeRegister(FlowAssertNode)
 NodeFactory.nodeRegister(StructureAssertNode)
 NodeFactory.nodeRegister(DataAssertNode)
 NodeFactory.nodeRegister(PythonNode)
+NodeFactory.nodeRegister(OCRNode)
+NodeFactory.nodeRegister(ScreenCaptureNode)
 
 class TestParam:
     def __init__(self,testUUID=None,totalTimeout=30000) -> None:

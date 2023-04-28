@@ -373,6 +373,7 @@ export enum CategoryEnums {
     FlowType = "FlowType",              // 流程控制节点
     CalculateType = "CalculateType",    // 数理运算节点
     AssertType = "AssertType",          // 断言节点
+    GUIProcessType = "UIProcessType",   // GUI操作类型
     ExtensionType = "ExtensionType",    // 其他扩展节点
 }
 
@@ -1059,6 +1060,49 @@ export class PythonNode {
     }
 }
 
+export class ScreenCaptureNode {
+    static categoryName = CategoryEnums.GUIProcessType;
+    static typeName = ScreenCaptureNode.name;
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(FlowParam,"prev");
+        const outputs = new InOutParams()
+            .addParam(FlowParam,"next")
+            .addParam(VariableParam,"data")
+        const temp = new BaseNode(nodeName
+            ,inputs
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,ScreenCaptureNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
+
+export class OCRNode {
+    static categoryName = CategoryEnums.GUIProcessType;
+    static typeName = OCRNode.name;
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"image")
+        const outputs = new InOutParams()
+            .addParam(FlowParam,"next")
+            .addParam(VariableParam,"result")
+        const temp = new BaseNode(nodeName
+            ,inputs
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,OCRNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
+
 // ====================== 实用工具 ====================== 
 // 默认翻译
 export const basicNodeTranslate:Map<string,string> = new Map();
@@ -1423,6 +1467,7 @@ basicNodeTranslate.set(CategoryEnums.FlowType,"流程控制节点");
 basicNodeTranslate.set(CategoryEnums.CalculateType,"数理逻辑运算节点");
 
 basicNodeTranslate.set(CategoryEnums.AssertType,"断言节点");
+basicNodeTranslate.set(CategoryEnums.GUIProcessType,"GUI处理节点");
 basicNodeTranslate.set(CategoryEnums.ExtensionType,"其他扩展节点");
 
 basicNodeTranslate.set("BeginNode","测试起始节点");
@@ -1462,6 +1507,9 @@ basicNodeTranslate.set(StructureAssertNode.name,"结构断言节点")
 basicNodeTranslate.set(DataAssertNode.name,"数据断言节点")
 basicNodeTranslate.set(PythonNode.name,"Python脚本节点")
 
+basicNodeTranslate.set(OCRNode.name,"OCR光学字符识别节点")
+basicNodeTranslate.set(ScreenCaptureNode.name,"屏幕截图节点")
+
 NodeFactory.loadNodeLibrary(BeginNode);
 NodeFactory.loadNodeLibrary(EndNode);
 NodeFactory.loadNodeLibrary(LogNode);
@@ -1496,6 +1544,8 @@ NodeFactory.loadNodeLibrary(BarrierNode);
 NodeFactory.loadNodeLibrary(VariableNode);
 NodeFactory.loadNodeLibrary(SleepNode);
 NodeFactory.loadNodeLibrary(PythonNode);
+NodeFactory.loadNodeLibrary(OCRNode);
+NodeFactory.loadNodeLibrary(ScreenCaptureNode);
 
 // 模块实现
 export class ModuleFlowParam {
