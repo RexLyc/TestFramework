@@ -45,6 +45,8 @@ export enum CommonMessageType {
     TEST_STATE       = "test_state",
     // 测试控制
     TEST_COMMAND     = "test_command",
+    // 测试报告
+    TEST_REPORT      = "test_report",
 }
 
 export enum TestCommandType {

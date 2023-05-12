@@ -18,6 +18,7 @@ import logging
 import easyocr
 import pyautogui
 import numpy
+import timeit
 
 class ExitStateEnum(Enum):
     # 正常结束
@@ -250,6 +251,66 @@ class WebsocketFile(File):
 class SerialFile(File):
     pass
 
+# ================= 测试报告 =================
+class TimelineEntity(dict):
+    def __init__(self, nodeName) -> None:
+        self.nodeName = nodeName
+        # self.totalTime = 0
+        self.timelines = dict()
+        dict.__init__(self,nodeName = self.nodeName, timelines = self.timelines)
+
+    def markBegin(self,nodeFullName):
+        self.timelines[nodeFullName] = [timeit.default_timer()]
+
+    def markEnd(self,nodeFullName):
+        self.timelines[nodeFullName].append(timeit.default_timer())
+        # self.totalTime += round(self.timelines[nodeFullName][1]-self.timelines[nodeFullName][0],6)
+        # self['totalTime']=self.totalTime
+
+# 记录时间线
+class TestTimeline(dict):
+    def __init__(self) -> None:
+        self.timelineMap = dict()
+        dict.__init__(self,timelineMap = self.timelineMap)
+    
+    # 标记指定节点开启一个新的运行期
+    def markNodeBegin(self,nodeType,nodeName,nodeFullName):
+        if nodeType not in self.timelineMap:
+            self.timelineMap[nodeType] = dict()
+        if nodeFullName not in self.timelineMap[nodeType]:
+            self.timelineMap[nodeType][nodeName] = TimelineEntity(nodeName)
+        self.timelineMap[nodeType][nodeName].markBegin(nodeFullName)
+
+    # 标记指定节点结束运行期
+    def markNodeEnd(self,nodeType,nodeName,nodeFullName):
+        self.timelineMap[nodeType][nodeName].markEnd(nodeFullName)
+
+# 记录拓扑关系（前驱后继，以及生成关系）
+class TestTopology(dict):
+    def __init__(self) -> None:
+        self.runOrderList = []
+        self.generateMap  = dict()
+        self.nodeIndexMap = dict()
+        dict.__init__(self,runOrderList= self.runOrderList, generateMap = self.generateMap)
+
+    def nodeNew(self,prevNodeName,newNodeName):
+        if prevNodeName not in self.generateMap:
+            self.generateMap[prevNodeName] = []
+        if newNodeName not in self.nodeIndexMap:
+            self.nodeIndexMap[newNodeName] = 0
+        newNodeFullName = newNodeName+' x'+str(self.nodeIndexMap[newNodeName])
+        self.generateMap[prevNodeName].append(newNodeFullName)
+        return newNodeFullName
+    
+    def nodeNewRound(self):
+        '''
+        标记一轮新增节点的结束，对所有nodeIndex进行自增
+        '''
+        for name in self.nodeIndexMap:
+            self.nodeIndexMap[name] += 1
+    
+    def nodeRun(self,currentNodeName):
+        self.runOrderList.append(currentNodeName)
 
 # ================= 运行节点 =================
 class BaseNode:
@@ -294,6 +355,7 @@ class BaseNode:
         except Exception as err:
             raise TestRuntimeError(self.name,'{}'.format(err))
 
+# TODO: 更好的文件处理方案
 class FileNode(BaseNode):
     def doRun(self, data, testParam=None, prevNode=None):
         try:
@@ -510,11 +572,8 @@ class OrNode(BaseNode):
 
 class NotNode(BaseNode):
     def _run(self,data,testParam,prevNode):
-        logging.info("?")
         inputCondition = data[self.inputs[1]['paramRef'][0]]
-        logging.info("?")
         data[self.name+'$1'] = (not inputCondition)
-        logging.info("?")
 
 class BarrierNode(BaseNode):
     def __init__(self, graph_node):
@@ -759,11 +818,14 @@ class TestGraph:
         # 上一个调度执行的节点
         self.lastRunNode = None
     
-    def run(self,testParam:TestParam,inModule=False):
+    def run(self,testParam:TestParam,inModule=False,topology:TestTopology=None,timeline:TestTimeline=None):
         try:
             # 传递变量区
             # runQueue内容tuple，分别是节点前驱和后继
-            self.runQueue.put((None,self.nodes[self.startName]))
+            fullName = ''
+            if not inModule:
+                fullName = topology.nodeNew(None,self.nodes[self.startName].name)
+            self.runQueue.put((None,self.nodes[self.startName],fullName))
             a=time.time()
             Tools.log(self.global_data,'begin running')
             self.global_data['$$file'] = []
@@ -779,15 +841,27 @@ class TestGraph:
                     return RunResult(time.time()-a,self.global_data['$$log'],ExitStateEnum.KILLED,testParam.testUUID)
                 
                 # 继续执行
-                (prevNode,currentNode) = self.runQueue.get()
+                (prevNode, currentNode, currentNodeFullName) = self.runQueue.get()
+                # 记录执行节点
+                if not inModule:
+                    topology.nodeRun(currentNodeName=currentNodeFullName)
                 logging.info('{} running'.format(currentNode.name))
+                # 调用节点运行
+                if not inModule:
+                    timeline.markNodeBegin(type(currentNode).__name__,currentNode.name,currentNodeFullName)
                 nextNodes, isValid = currentNode.doRun(self.global_data,testParam,prevNode)
+                if not inModule:
+                    timeline.markNodeEnd(type(currentNode).__name__,currentNode.name,currentNodeFullName)
                 logging.info('next: {}, isValid: {}'.format(nextNodes,isValid))
                 if isValid:
                     for node in nextNodes:
-                        self.runQueue.put((currentNode,self.nodes[node]))
+                        if not inModule:
+                            fullName = topology.nodeNew(currentNodeFullName,self.nodes[node].name)
+                        self.runQueue.put((currentNode,self.nodes[node],fullName))
                 self.lastRunNode = currentNode
-            
+                # 标记一轮结束
+                if not inModule:
+                    topology.nodeNewRound()
             Tools.log(self.global_data,'end running')
             b=time.time()
             Tools.log(self.global_data,'time elapsed :{}'.format(b-a))
@@ -838,6 +912,12 @@ class TestPlan:
         self.graph = testGraph
         # 默认测试参数
         self.testParam = testParam or TestParam()
+        # 测试报告
+        self.timeline = TestTimeline()
+        self.topology = TestTopology()
+    
+    def beginTest(self):
+        return self.graph.run(self.testParam,topology=self.topology,timeline=self.timeline)
 
 class TestPlanFactory:
     @staticmethod
@@ -857,7 +937,8 @@ class TestExecutor:
         # 保存测试计划
         TestExecutor.testPlanMap[testPlan.testParam.testUUID]=testPlan
         # 保存Future
-        future = TestExecutor.testPool.submit(testPlan.graph.run,testPlan.testParam)
+        # future = TestExecutor.testPool.submit(testPlan.graph.run,testPlan.testParam)
+        future = TestExecutor.testPool.submit(testPlan.beginTest)
         future.add_done_callback(doneCallBack)
         TestExecutor.testFutureMap[testPlan.testParam.testUUID] = future
 

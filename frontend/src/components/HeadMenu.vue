@@ -370,6 +370,12 @@ const handleDeleteServerSavae = (event:any)=>{
       // 取消
     })
 }
+
+const showRunTestReport = (event:any)=>{
+  const e = new CustomEvent('showTestReport',{detail:null})
+  dispatchEvent(e);
+}
+
 </script>
 
 <template>
@@ -381,12 +387,13 @@ const handleDeleteServerSavae = (event:any)=>{
     </el-col>
     <el-col :span="6">
       <el-row justify="end">
-        <el-col :span="2"><el-icon @click="browseServerSave" title="浏览服务器存档"><Goods /></el-icon></el-col>  
-        <el-col :span="2"><el-icon @click="shareSaveToServer" title="发布共享存档"><Share /></el-icon></el-col>  
-        <el-col :span="2"><el-icon @click="showRunTestGraph" title="运行测试图"><VideoPlay /></el-icon></el-col>  
-        <el-col :span="2"><el-icon @click="showUpload" title="加载测试图"><FolderOpened /></el-icon></el-col>  
-        <el-col :span="2"><el-icon @click="sendExportEvent" title="导出测试图"><Download /></el-icon></el-col>  
-        <el-col :span="2"><el-icon @click="dialogTableVisible = true" ><User /></el-icon></el-col>  
+        <el-col :span="2"><el-icon @click="browseServerSave" title="浏览服务器存档"><Goods /></el-icon></el-col>
+        <el-col :span="2"><el-icon @click="shareSaveToServer" title="发布共享存档"><Share /></el-icon></el-col>
+        <el-col :span="2"><el-icon @click="showRunTestGraph" title="运行测试图"><VideoPlay /></el-icon></el-col>
+        <el-col :span="2"><el-icon @click="showRunTestReport" title="查看测试报告"><Histogram /></el-icon></el-col>
+        <el-col :span="2"><el-icon @click="showUpload" title="加载测试图"><FolderOpened /></el-icon></el-col>
+        <el-col :span="2"><el-icon @click="sendExportEvent" title="导出测试图"><Download /></el-icon></el-col>
+        <el-col :span="2"><el-icon @click="dialogTableVisible = true" ><User /></el-icon></el-col>
       </el-row>
       
       

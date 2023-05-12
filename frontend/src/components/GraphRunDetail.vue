@@ -19,7 +19,7 @@ enum GraphRunStateEnum {
   KILLED        = '强制结束',
   TIMEOUT       = '超时',
   INVALID       = '无效',
-  ASSERTERROR   = '断言未通过',
+  ASSERTERROR   = '断言失败',
 }
 
 enum ServerLinkStateEnum {
@@ -107,6 +107,10 @@ class ServerInfo{
         }],
         [CommonMessageType.SUBMIT.toString(),(message:any)=>{
           console.log("submit message: %o",message)
+          if(this.testUUID==message.msgData.testUUID){
+            console.log("get result faster than submit ack");
+            return;
+          }
           switch(message.msgData.result){
             case SubmitResultType.SUCCESS:{
               this.runState=GraphRunStateEnum.RUNNING;
@@ -130,6 +134,9 @@ class ServerInfo{
         }],
         [CommonMessageType.TEST_RESULT.toString(),(message:CommonMessage)=>{
           console.log('test result message: %o',message)
+          if(!message.msgData){
+            this.runState = GraphRunStateEnum.INVALID;
+          }
           switch(message.msgData.exitState){
             case ExitStateEnum.EXCEPTION:{
               this.runState = GraphRunStateEnum.EXCEPTION;
@@ -167,7 +174,7 @@ class ServerInfo{
           this.log=message.msgData.log
         }],
         [CommonMessageType.TEST_COMMAND.toString(),(message:CommonMessage)=>{
-          console.log('test result message: %o',message)
+          console.log('test command message: %o',message)
           if(message.msgData.result==true){
             ElNotification.success({
               title: '注意',
@@ -183,7 +190,12 @@ class ServerInfo{
               duration: 5000
             })
           }
-        }]
+        }],
+        [CommonMessageType.TEST_REPORT.toString(),(message:CommonMessage)=>{
+          console.log('test report message: %o',message);
+          const e = new CustomEvent('showTestReport',{detail:{'topology':message.msgData.topology,'timeline':message.msgData.timeline}})
+          dispatchEvent(e);
+        }],
       ])
     )
   }

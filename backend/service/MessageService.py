@@ -19,6 +19,8 @@ class MessageType(Enum):
     TEST_STATE       = "test_state"
     #  测试控制
     TEST_COMMAND     = "test_command"
+    #  测试报告
+    TEST_REPORT      = "test_report"
 
 # 消息核心数据
 class MessageBody(dict):
@@ -154,10 +156,10 @@ class MessageService:
         MessageService.catchUp(testPlanUUID)
     
     @staticmethod
-    def consumeAck(testPlanUUID,sid):
-        logging.info('consumeAck {} {}'.format(testPlanUUID,sid))
-        MessageService.testPlanMap[testPlanUUID].consumeAck(id)
+    def consumeAck(testPlanUUID,sid,consumeIndex):
+        MessageService.testPlanMap[testPlanUUID].consumeAck(sid)
         MessageService.consumerMap[sid].consumeAck(testPlanUUID)
+        logging.info('consumeAck {} {} {}'.format(testPlanUUID,sid,consumeIndex))
 
     @staticmethod
     def catchUp(testPlanUUID:uuid.UUID,consumerId=None):
@@ -174,4 +176,4 @@ class MessageService:
                 MessageService.socket.emit(msg.messageBody.msgType,msg.messageBody
                                            ,namespace=MessageService.namespace
                                            ,to=id
-                                           ,callback=MessageService.consumeAck(testPlanUUID,id))
+                                           ,callback=MessageService.consumeAck(testPlanUUID,id,consumerIds[id]))

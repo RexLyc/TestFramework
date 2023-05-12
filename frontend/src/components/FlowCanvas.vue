@@ -12,6 +12,7 @@ import GraphRunDetail from './GraphRunDetail.vue'
 import {useGraphNameStore,useFlowModeStore} from '@/stores/counter'
 import * as tn from  '@/TestNode'
 import { ref } from 'vue'
+import TestReport from './TestReport.vue'
 
 const detailDrawler = ref(false)
 const graphExportDrawler = ref(false)
@@ -25,6 +26,8 @@ const dialogVisible = ref(false);
 const detailGraphName = ref("");
 const detailNodeName = ref("");
 const graphRunDrawler = ref(false);
+const testReportDetail = ref({});
+const testReportDrawler = ref(false);
 
 // 存储当前处理的模块
 const currentGraphName = useGraphNameStore()
@@ -187,6 +190,7 @@ onMounted(()=>{
   addEventListener('dataNodeChanged',dataNodeChanged);
   addEventListener('nodeParamCountChanged',onNodeParamCountChanged);
   addEventListener('runTestGraph',runTestGraph);
+  addEventListener('showTestReport',showTestReport);
   addEventListener('importShareSaves',importShareSaves);
 
   editor.on('keydown',(event:any)=>{
@@ -199,6 +203,12 @@ onMounted(()=>{
 const runTestGraph = (event:any) => {
   detailGraphName.value = graph.graphName;
   graphRunDrawler.value = true;
+}
+
+const showTestReport = (event:any) => {
+  console.log(event.detail)
+  testReportDetail.value = event.detail;
+  testReportDrawler.value = true;
 }
 
 const dataNodeChanged = (event:any)=>{
@@ -381,6 +391,14 @@ function download(filename:string, content:string) {
         <div id="runGraphDiv">
           <GraphRunDetail :graph-name="detailGraphName"/>
         </div>
+      </el-drawer>
+
+      <el-drawer v-model="testReportDrawler" size="70%" title="测试报告" margin="0" padding="0">
+        <el-scrollbar>
+          <div id="runGraphDiv">
+            <TestReport :testReportDetail="testReportDetail"/>
+          </div>
+        </el-scrollbar>
       </el-drawer>
       
       <el-dialog

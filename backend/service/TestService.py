@@ -1,4 +1,4 @@
-from graph.Component import TestPlanFactory,TestExecutor,TestIncompatibleError,TestRuntimeError,TestError,RunResult
+from graph.Component import TestPlanFactory,TestExecutor,TestIncompatibleError,TestRuntimeError,TestError,RunResult,TestParam,TestPlan
 from .MessageService import *
 import logging
 
@@ -17,10 +17,17 @@ class SubmitResponse(dict):
         self.message=message
         dict.__init__(self,result=self.result.value,testUUID=self.testUUID,message=self.message)
 
+class TestReport(dict):
+    def __init__(self,timeline,topology) -> None:
+        self.timeline = timeline
+        self.topology = topology
+        dict.__init__(self,timeline=self.timeline,topology=self.topology)
+
 class TestService:
     @staticmethod
-    def _task_done(future,testPlanUUID):
-        MessageService.appendMessage(testPlanUUID,MessageBody(MessageType.TEST_RESULT,future.result()))
+    def _task_done(future,testPlan):
+        MessageService.appendMessage(testPlan.testParam.testUUID,MessageBody(MessageType.TEST_RESULT,future.result()))
+        MessageService.appendMessage(testPlan.testParam.testUUID,MessageBody(MessageType.TEST_REPORT,TestReport(testPlan.timeline,testPlan.topology)))
 
     @staticmethod
     def getTestResult(testUUID,sid):
@@ -49,7 +56,7 @@ class TestService:
             # 创建sid和testPlan的绑定
             testPlan = TestPlanFactory.buildTestPlan(jsonGraph)
             MessageService.subscribe(sid,testPlan.testParam.testUUID)
-            TestExecutor.submitTestTask(testPlan, lambda future:TestService._task_done(future,testPlan.testParam.testUUID))
+            TestExecutor.submitTestTask(testPlan, lambda future:TestService._task_done(future,testPlan))
             return MessageBody(msgType=MessageType.SUBMIT,msgData=SubmitResponse(SubmitResultType.SUCCESS,testPlan.testParam.testUUID,'test running...'))
         except TestIncompatibleError as err:
             logging.info('submit TestIncompatibleError {}'.format(err))
