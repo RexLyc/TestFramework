@@ -52,7 +52,7 @@ npm run build-only
 
 # backend
 cd ../backend
-pip3 install logging flask flask_cors flask_socketio websockets pyserial eventlet pyinstaller pyautogui easyocr
+pip3 install logging flask flask_cors flask_socketio websockets pyserial eventlet pyinstaller pyautogui easyocr numpy
 python3 ./server.py
 pyinstaller server.spec
 
@@ -61,6 +61,6 @@ npm install
 npm run start
 ```
 ## 开发依赖
-- python3 (推荐>=3.8)
+- python3 (>=3.7,<3.11)
 - npm 9.2.0
 - nodejs v18.12.1
