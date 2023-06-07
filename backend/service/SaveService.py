@@ -3,6 +3,8 @@ from enum import Enum
 import sqlite3 as sql
 import os
 import logging
+from .TestService import TestPlan,TestPlanFactory
+import time
 
 FRAMEWORK_DATABASE_PATH = './test_framework.db'
 FRAMEWORK_DATA_DIR      = './data'
@@ -10,16 +12,26 @@ FRAMEWORK_SAVE_DIR      = FRAMEWORK_DATA_DIR + '/save/'
 FRAMEWORK_REPORT_DIR    = FRAMEWORK_DATA_DIR + '/report/'
 
 sql_map = {
-'save_info': '''
-                create table save_info(
-                    save_name   varchar(128) not null,
-                    save_time   datetime     not null default (datetime('now','localtime')),
-                    description varchar(256) ,
-                    type        varchar(2)   not null default '1', -- module 0 , graph 1
-                    category    varchar(64)  not null default 'uncategorized', -- category name
-                    PRIMARY KEY (save_name)
-                );
-            '''           
+'save_info':        '''
+                        create table save_info(
+                            save_name   varchar(128) not null,
+                            save_time   datetime     not null default (datetime('now','localtime')),
+                            description varchar(256) ,
+                            type        varchar(2)   not null default '1', -- module 0 , graph 1
+                            category    varchar(64)  not null default 'uncategorized', -- category name
+                            PRIMARY KEY (save_name)
+                        );
+                    ''',
+'test_report_info': '''
+                        create table test_report_info(
+                            graph_name   varchar(128)     not null default('default'),
+                            test_uuid    varchar(128)     not null,
+                            run_result   varchar(16)      not null default('-1'),
+                            total_time   double           not null default(0.0),
+                            save_time   datetime     not null default (datetime('now','localtime')),
+                            PRIMARY KEY (test_uuid)
+                        );
+                    '''
 }
 
 class SaveResponseType(Enum):
@@ -51,7 +63,7 @@ class DBUtils:
         values = ''
         for key,value in kwargs.items():
             names+='`'+key+'`,'
-            values+="'"+value+"',"
+            values+="'"+str(value)+"',"
             logging.info(key,values)
         sqlStatement= 'insert into {} ({}) values({})'.format(table,names[:-1],values[:-1])
         logging.info(sqlStatement)
@@ -69,6 +81,7 @@ class SaveService:
     def init():
         # 初始化环境，建立表格、文件夹
         SaveService.getAllSaveInfo()
+        SaveService.getAllTestReport()
         if not os.path.isdir(FRAMEWORK_SAVE_DIR):
             os.makedirs(FRAMEWORK_SAVE_DIR)
         if not os.path.isdir(FRAMEWORK_REPORT_DIR):
@@ -145,3 +158,32 @@ class SaveService:
                 categoryName.add(row[4])
             result={'categoryName':list(categoryName)}
         return result
+    
+    @staticmethod
+    def getAllTestReport():
+        '''查询全部测试计划报告'''
+        logging.info('get all test report info')
+        with sql.connect(FRAMEWORK_DATABASE_PATH) as conn:
+            cursor = DBUtils.queryOrCreate(conn,'test_report_info')
+            result = []
+            for row in cursor:
+                result.append({'graphName':row[0],'testUUID':row[1],'runResult':row[2],'totalTime':row[3],'saveTime':row[4]})
+        return SaveResponse(SaveResponseType.SUCCESS,result)
+
+    @staticmethod
+    def addTestReport(testPlan:TestPlan):
+        '''
+        将testPlan进行文件和数据库存储
+        db: graphName testUUID runResult totalTime saveTime
+        file: report/testUUID.json
+        '''
+        logging.info('add testPlan: {} {} {} {} {}'.format(testPlan.graph.graphName,testPlan.testParam.testUUID,testPlan.runResult.exitState,testPlan.runResult.timeElapsed,time.time()))
+        with sql.connect(FRAMEWORK_DATABASE_PATH) as conn:
+            cursor = DBUtils.insert(conn,'test_report_info',graph_name=testPlan.graph.graphName
+                                    ,test_uuid=testPlan.testParam.testUUID.hex
+                                    ,run_result=testPlan.runResult.exitState
+                                    ,total_time=testPlan.runResult.timeElapsed)
+            fo = open(FRAMEWORK_REPORT_DIR+'/'+testPlan.testParam.testUUID.hex+'.json', "w")
+            fo.write(TestPlanFactory.exportTestPlan(testPlan))
+            fo.close()
+        return SaveResponse(SaveResponseType.SUCCESS)

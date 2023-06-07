@@ -242,6 +242,10 @@ class HttpFile(File):
         self.url=url
         self.method=method
 
+    def close(self):
+        # http file don't need to close
+        pass
+
 class TcpFile(File):
     pass
 
@@ -405,15 +409,18 @@ class SendNode(BaseNode):
         result = ''
         dataBody = '{}'.format(rawData).encode()
         if isinstance(file,HttpFile):
-            resp = requests.request(method=file.method,url=file.url,data=dataBody,timeout=timeout)
+            logging.info(dataBody)
+            headers = {'Content-Type':'application/json'}
+            resp = requests.request(method=file.method,headers=headers,url=file.url,data=dataBody,timeout=timeout)
             if not resp.ok:
-                raise TestRuntimeError(self.name,'http send failed: {}'.format(resp.content))
-            result = resp.content
+                raise TestRuntimeError(self.name,'http send failed: {}'.format(resp.text))
+            result = resp.text
         elif isinstance(file,TcpFile):
             file.file.settimeout(timeout)
             result = file.file.send(dataBody)
         elif isinstance(file,WebsocketFile):
-            result = asyncio.get_event_loop().run_until_complete(Tools.sendWebsocket(file.file,dataBody,timeout))
+            logging.info("sendnode, send websocket")
+            result = asyncio.get_event_loop().run_until_complete(Tools.sendWebsocket(file.file,rawData,timeout))
         elif isinstance(file,SerialFile):
             # 将str 转 bytes
             if isinstance(rawData,str):
@@ -809,7 +816,7 @@ class TestParam:
         self.testUUID=testUUID or uuid.uuid4()
 
 class TestGraph:
-    def __init__(self,global_data,nodes,startName,endName):
+    def __init__(self,global_data,nodes,startName,endName,graphName,nameCountMap):
         self.global_data=global_data
         self.nodes=nodes
         self.startName=startName
@@ -817,6 +824,9 @@ class TestGraph:
         self.runQueue = Queue()
         # 上一个调度执行的节点
         self.lastRunNode = None
+        # 用于存储的内容
+        self.graphName = graphName
+        self.nameCountMap = nameCountMap
     
     def run(self,testParam:TestParam,inModule=False,topology:TestTopology=None,timeline:TestTimeline=None):
         try:
@@ -888,10 +898,10 @@ class TestGraphFactory:
     @staticmethod
     def buildGraph(jsonData):
         obj = json.loads(jsonData)
-        return TestGraphFactory.buildGraphFromNameNodeMap(obj['graph']['nameNodeMap'])
+        return TestGraphFactory.buildGraphFromNameNodeMap(obj['graph']['nameNodeMap'],obj['graph']['nameCountMap'],obj['graph']['graphName'])
     
     @staticmethod
-    def buildGraphFromNameNodeMap(nameNodeMap):
+    def buildGraphFromNameNodeMap(nameNodeMap, nameCountMap, graphName):
         nodes = dict()
         global_data = dict()
         startName=''
@@ -905,24 +915,56 @@ class TestGraphFactory:
                 endName = node.name
             elif isinstance(node,ConstantNode):
                 node.doRun(global_data)
-        return TestGraph(global_data=global_data,nodes=nodes,startName=startName,endName=endName)
+        return TestGraph(global_data=global_data,nodes=nodes,startName=startName,endName=endName,graphName=graphName,nameCountMap=nameCountMap)
 
 class TestPlan:
     def __init__(self,testGraph:TestGraph,testParam:TestParam=None):
         self.graph = testGraph
         # 默认测试参数
         self.testParam = testParam or TestParam()
+        # 测试结果
+        self.runResult = None
         # 测试报告
         self.timeline = TestTimeline()
         self.topology = TestTopology()
     
     def beginTest(self):
-        return self.graph.run(self.testParam,topology=self.topology,timeline=self.timeline)
+        self.runResult = self.graph.run(self.testParam,topology=self.topology,timeline=self.timeline)
+        return self.runResult
 
 class TestPlanFactory:
     @staticmethod
     def buildTestPlan(jsonData):
         return TestPlan(TestGraphFactory.buildGraph(jsonData))
+    
+    @staticmethod
+    def exportTestPlan(testPlan:TestPlan):
+        '''
+        将testPlan导出为json
+        {
+            "meta": {
+                "version": 1,
+                "type": "report"
+            },
+            "testPlan" : {
+                "graph": {
+                    "graphName": "",
+                    "nameCountMap": [],
+                    "nameNodeMap": []
+                },
+                "testParam":{}
+                "runResult":{}
+                "timeline":{}
+                "topology":{}
+            }
+        }
+        '''
+        exportDict = dict(graph=testPlan.graph
+                          , testParam=testPlan.testParam
+                          , runResult = testPlan.runResult.exitState
+                          , timeline =testPlan.timeline
+                          , topology = testPlan.topology)
+        return json.dumps(exportDict)
 
 class TestExecutor:
     testPool = ThreadPoolExecutor(max_workers=10)

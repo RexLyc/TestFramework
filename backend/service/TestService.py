@@ -1,5 +1,6 @@
 from graph.Component import TestPlanFactory,TestExecutor,TestIncompatibleError,TestRuntimeError,TestError,RunResult,TestParam,TestPlan
 from .MessageService import *
+from .SaveService import *
 import logging
 
 class SubmitResultType(Enum):
@@ -28,6 +29,7 @@ class TestService:
     def _task_done(future,testPlan):
         MessageService.appendMessage(testPlan.testParam.testUUID,MessageBody(MessageType.TEST_RESULT,future.result()))
         MessageService.appendMessage(testPlan.testParam.testUUID,MessageBody(MessageType.TEST_REPORT,TestReport(testPlan.timeline,testPlan.topology)))
+        SaveService.addTestReport(testPlan)
 
     @staticmethod
     def getTestResult(testUUID,sid):
