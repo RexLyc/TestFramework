@@ -68,6 +68,8 @@ export enum ParamRuntimeTypeEnums {
     PythonValue     = "PythonValue",
     // 参数值是bool类型值
     BoolValue       = "BoolValue",
+    // 参数值是字符串形式Hex
+    HexValue        = "HexValue",
 }
 
 // 分组用于表明是否可以连接
@@ -1127,8 +1129,9 @@ basicParamTranslator.set(ParamRuntimeTypeEnums.VarNameValue,'引用变量');
 basicParamTranslator.set(ParamRuntimeTypeEnums.StringValue,'字符串字面值');
 basicParamTranslator.set(ParamRuntimeTypeEnums.IntegerValue,'整型数字面值');
 basicParamTranslator.set(ParamRuntimeTypeEnums.FloatValue,'浮点数字面值');
-basicParamTranslator.set(ParamRuntimeTypeEnums.PythonValue,'Python脚本')
-basicParamTranslator.set(ParamRuntimeTypeEnums.BoolValue,'逻辑真值Bool')
+basicParamTranslator.set(ParamRuntimeTypeEnums.PythonValue,'Python脚本');
+basicParamTranslator.set(ParamRuntimeTypeEnums.BoolValue,'逻辑真值Bool');
+basicParamTranslator.set(ParamRuntimeTypeEnums.HexValue,'Hex字符串');
 
 
 export class ParamTranslator {

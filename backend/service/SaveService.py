@@ -177,13 +177,13 @@ class SaveService:
         db: graphName testUUID runResult totalTime saveTime
         file: report/testUUID.json
         '''
-        logging.info('add testPlan: {} {} {} {} {}'.format(testPlan.graph.graphName,testPlan.testParam.testUUID,testPlan.runResult.exitState,testPlan.runResult.timeElapsed,time.time()))
-        with sql.connect(FRAMEWORK_DATABASE_PATH) as conn:
-            cursor = DBUtils.insert(conn,'test_report_info',graph_name=testPlan.graph.graphName
-                                    ,test_uuid=testPlan.testParam.testUUID.hex
-                                    ,run_result=testPlan.runResult.exitState
-                                    ,total_time=testPlan.runResult.timeElapsed)
-            fo = open(FRAMEWORK_REPORT_DIR+'/'+testPlan.testParam.testUUID.hex+'.json', "w")
-            fo.write(TestPlanFactory.exportTestPlan(testPlan))
-            fo.close()
+        # logging.info('add testPlan: {} {} {} {} {}'.format(testPlan.graph.graphName,testPlan.testParam.testUUID,testPlan.runResult.exitState,testPlan.runResult.timeElapsed,time.time()))
+        # with sql.connect(FRAMEWORK_DATABASE_PATH) as conn:
+        #     cursor = DBUtils.insert(conn,'test_report_info',graph_name=testPlan.graph.graphName
+        #                             ,test_uuid=testPlan.testParam.testUUID.hex
+        #                             ,run_result=testPlan.runResult.exitState
+        #                             ,total_time=testPlan.runResult.timeElapsed)
+        #     fo = open(FRAMEWORK_REPORT_DIR+'/'+testPlan.testParam.testUUID.hex+'.json', "w")
+        #     fo.write(TestPlanFactory.exportTestPlan(testPlan))
+        #     fo.close()
         return SaveResponse(SaveResponseType.SUCCESS)

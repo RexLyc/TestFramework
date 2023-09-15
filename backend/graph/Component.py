@@ -84,6 +84,14 @@ class PythonValue:
     def __call__(self, *args, **kwds):
         return compile(self.script,'','exec')
 
+class HexValue:
+    def __init__(self,hexStr) -> None:
+        logging.info('save hexValue str: {}'.format(hexStr))
+        self.hexStr = hexStr
+
+    def __call__(self, *args, **kwds):
+        return bytes.fromhex(self.hexStr)
+
 class Tools:
     @staticmethod
     def getParamType(typeName):
@@ -97,6 +105,8 @@ class Tools:
             return bool
         elif typeName == PythonValue.__name__:
             return PythonValue
+        elif typeName == 'HexValue':
+            return HexValue
         else:
             return None
     
@@ -112,6 +122,7 @@ class Tools:
     @staticmethod
     def createTcpFile(addr,port):
         s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+        s.setblocking(True)
         s.connect((addr,port))
         return s
     
@@ -417,7 +428,11 @@ class SendNode(BaseNode):
             result = resp.text
         elif isinstance(file,TcpFile):
             file.file.settimeout(timeout)
-            result = file.file.send(dataBody)
+            if isinstance(rawData,HexValue):
+                result = file.file.sendall(rawData())
+                
+            else:
+                result = file.file.sendall(dataBody)
         elif isinstance(file,WebsocketFile):
             logging.info("sendnode, send websocket")
             result = asyncio.get_event_loop().run_until_complete(Tools.sendWebsocket(file.file,rawData,timeout))
