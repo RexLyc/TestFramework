@@ -105,9 +105,11 @@ const createParition = (data:any)=>{
   // add new
   const svg = d3.select('.PieContainer')
     .append('svg')
+    .style('height','calc(100vh - 140px)')
+    .style('width','100%')
     .attr("preserveAspectRatio", "xMidYMid meet")
     .attr("viewBox", [0, 0, width, width])
-    .style("font", "12px sans-serif");
+    .style("font", "16px sans-serif");
   const root = partitionHelper(data);
 
   root.each((d:any) => d.current = d);
@@ -248,6 +250,8 @@ const chart = (data:any,height:number,color:any,types:any)=> {
 
   const svg = d3.select(".TopologyContainer").append("svg")
       .attr("viewBox", [-width / 2, -height / 2, width, height])
+      .style('height','calc(100vh - 140px)')
+      .style('width','100%')
       .style("font", "20px sans-serif");
 
   // Per-type markers, as they don't inherit styles.
@@ -531,15 +535,32 @@ const activeNames = ref("1");
 </template>
 
 <style scoped>
+/* html, body, *{
+    display:flex;
+    flex-direction: column;
+    height: 100%;
+    
+} */
+
 /* :deep(.el-popper){
   overflow: hidden ;
 } */
-.PieContainer,.TopologyContainer {
+
+
+/* .PieContainer {
   margin-left: 25%;
   margin-right: 25%;
   margin-top: 10px;
   margin-bottom: 10px;
 }
+
+.TopologyContainer {
+  margin-left: 10px;
+  margin-right: 10px;
+  margin-top: 10px;
+  margin-bottom: 10px;
+} */
+
 .el-collapse {
   margin-left: 20px;
 }

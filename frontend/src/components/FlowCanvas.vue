@@ -393,12 +393,10 @@ function download(filename:string, content:string) {
         </div>
       </el-drawer>
 
-      <el-drawer v-model="testReportDrawler" size="70%" title="测试报告" margin="0" padding="0">
-        <el-scrollbar>
-          <div id="runGraphDiv">
-            <TestReport :testReportDetail="testReportDetail"/>
-          </div>
-        </el-scrollbar>
+      <el-drawer v-model="testReportDrawler" size="70%" title="测试报告" margin="0" padding="0" style="display: flex;">
+        <div id="runGraphDiv">
+        <TestReport :testReportDetail="testReportDetail"/>
+        </div>
       </el-drawer>
       
       <el-dialog

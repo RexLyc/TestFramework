@@ -668,7 +668,7 @@ class CommonModuleNode(BaseNode):
     def __init__(self, graph_node):
         super().__init__(graph_node)
         logging.info(graph_node['internalGraph']['nameNodeMap'])
-        self.internalGraph = TestGraphFactory.buildGraphFromNameNodeMap(graph_node['internalGraph']['nameNodeMap'])
+        self.internalGraph = TestGraphFactory.buildGraphFromNameNodeMap(graph_node['internalGraph']['nameNodeMap'],graph_node['internalGraph']['nameCountMap'],graph_node['internalGraph']['graphName'])
         # startName beginName需要重新计算
         for nodeName in self.internalGraph.nodes:
             i = self.internalGraph.nodes[nodeName]
