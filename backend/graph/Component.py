@@ -19,6 +19,33 @@ import easyocr
 import pyautogui
 import numpy
 import timeit
+from Crypto.PublicKey import ECC
+from Crypto.Hash import SHA256
+from Crypto.Signature import DSS
+
+def sm2_verify(public_key_pem, message, signature):
+    """
+    使用pycryptodome库进行SM2公钥验签
+    :param public_key_pem: SM2公钥的PEM格式字符串
+    :param message: 原始消息的字节串
+    :param signature: 签名的字节串
+    :return: 验签结果 (True/False)
+    """
+    # 加载公钥
+    # public_key = ECC.import_key(public_key_pem)
+    
+    # 创建一个hash对象用于计算消息摘要
+    hash_obj = SHA256.new(message)
+    
+    # 初始化签名验证器
+    verifier = DSS.new(public_key_pem, 'fips-186-3')
+    
+    # 验证签名
+    try:
+        verifier.verify(hash_obj, signature)
+        return True
+    except ValueError:
+        return False
 
 class ExitStateEnum(Enum):
     # 正常结束
@@ -754,6 +781,25 @@ class PythonNode(BaseNode):
         exec(script.script, execArgs)
         data[self.name+'$1'] = execArgs['func'](args)
 
+class OpenSSLNode(BaseNode):
+    def _run(self, data, testParam, prevNode):
+        # 输入数据共两部分，
+        algorithm = data[self.inputs[1]['paramRef'][0]]
+        inputData = data[self.inputs[2]['paramRef'][0]]
+        publicKey = data[self.inputs[3]['paramRef'][0]]
+        privateKey = data[self.inputs[4]['paramRef'][0]]
+        
+        # 示例使用
+        public_key_pem = publicKey
+        message = bytes.fromhex(inputData)
+        signature = bytes.fromhex(privateKey)
+        nodeResult = sm2_verify(public_key_pem, message, signature)
+        if nodeResult:
+            logging.info("Signature is valid.")
+        else:
+            logging.info("Signature is invalid.")
+        data[self.name+'$1'] = nodeResult
+
 class ScreenCaptureNode(BaseNode):
     def _run(self, data, testParam, prevNode):
         data[self.name+'$1'] = pyautogui.screenshot().convert('L')
@@ -820,6 +866,7 @@ NodeFactory.nodeRegister(FlowAssertNode)
 NodeFactory.nodeRegister(StructureAssertNode)
 NodeFactory.nodeRegister(DataAssertNode)
 NodeFactory.nodeRegister(PythonNode)
+NodeFactory.nodeRegister(OpenSSLNode)
 NodeFactory.nodeRegister(OCRNode)
 NodeFactory.nodeRegister(ScreenCaptureNode)
 

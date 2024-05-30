@@ -1062,6 +1062,31 @@ export class PythonNode {
     }
 }
 
+export class OpenSSLNode {
+    static categoryName = CategoryEnums.ExtensionType;
+    static typeName = OpenSSLNode.name;
+    static build(nodeName:string, pos_x:number, pos_y:number):BaseNode {
+        const inputs = new InOutParams();
+        inputs.addParam(FlowParam,"prev")
+            .addParam(VariableParam,"algorithm")
+            .addParam(VariableParam,"input")
+            .addParam(VariableParam,"pub")
+            .addParam(VariableParam,"pri");
+        const outputs = new InOutParams()
+            .addParam(FlowParam,"next")
+            .addParam(VariableParam,"data")
+        const temp = new BaseNode(nodeName
+            ,inputs
+            ,outputs
+            ,pos_x
+            ,pos_y
+            ,OpenSSLNode.typeName
+            ,{}
+            ,nodeName);
+        return temp;
+    }
+}
+
 export class ScreenCaptureNode {
     static categoryName = CategoryEnums.GUIProcessType;
     static typeName = ScreenCaptureNode.name;
@@ -1509,6 +1534,7 @@ basicNodeTranslate.set(FlowAssertNode.name,"流程断言节点")
 basicNodeTranslate.set(StructureAssertNode.name,"结构断言节点")
 basicNodeTranslate.set(DataAssertNode.name,"数据断言节点")
 basicNodeTranslate.set(PythonNode.name,"Python脚本节点")
+basicNodeTranslate.set(OpenSSLNode.name,"OpenSSL节点")
 
 basicNodeTranslate.set(OCRNode.name,"OCR光学字符识别节点")
 basicNodeTranslate.set(ScreenCaptureNode.name,"屏幕截图节点")
@@ -1547,6 +1573,7 @@ NodeFactory.loadNodeLibrary(BarrierNode);
 NodeFactory.loadNodeLibrary(VariableNode);
 NodeFactory.loadNodeLibrary(SleepNode);
 NodeFactory.loadNodeLibrary(PythonNode);
+NodeFactory.loadNodeLibrary(OpenSSLNode);
 NodeFactory.loadNodeLibrary(OCRNode);
 NodeFactory.loadNodeLibrary(ScreenCaptureNode);
 
